@@ -1,239 +1,265 @@
 # Educational Attendance Tracker
 
-Информационная система контроля посещаемости занятий студентами на основе компьютерного зрения (YOLOv8).
+Информационная система для контроля посещаемости учебных занятий. Проект объединяет веб-интерфейс, backend API, сервис распознавания людей на кадрах и PostgreSQL.
 
----
+Система рассчитана на учебное расписание с белой и зелёной неделей, импорт занятий из Excel, фиксацию замеров с камер и построение статистики по группам, преподавателям и дисциплинам.
 
-## Содержание
+## Возможности
 
-- [Educational Attendance Tracker](#educational-attendance-tracker)
-  - [Содержание](#содержание)
-  - [Функционал системы](#функционал-системы)
-  - [Архитектура](#архитектура)
-  - [Стек технологий](#стек-технологий)
-        - [Frontend](#frontend)
-        - [Backend](#backend)
-        - [Recognition](#recognition)
-        - [Database](#database)
-        - [Infrastructure](#infrastructure)
-  - [Структура репозитория](#структура-репозитория)
-  - [Модель данных](#модель-данных)
-  - [Требования](#требования)
-  - [Быстрый старт](#быстрый-старт)
-  - [Переменные окружения](#переменные-окружения)
-  - [API](#api)
-  - [Статус разработки](#статус-разработки)
-  - [Команда](#команда)
-
----
-
-## Функционал системы
-
-- **Распознавание** количества студентов с видеофрагмента / потокового видео с IP-камеры аудитории (количество + confidence), YOLOv8
-- **Хранение и обработка данных** — backend на FastAPI + PostgreSQL, хранение фрагментов кадров, на которых производилось считывание
-- **Веб-дашборд статистики** — вывод посещаемости по преподавателям / группам / дисциплинам, загрузка расписания из Excel
-
----
+- ведение справочников групп, преподавателей, дисциплин и аудиторий;
+- импорт расписания из Excel в двух форматах: институтская сетка и построчный шаблон;
+- поддержка занятий по белой, зелёной или каждой учебной неделе;
+- формирование занятий на выбранную дату по расписанию;
+- запуск и остановка обработки видеопотока для занятия;
+- подсчёт людей на кадрах через YOLOv8;
+- хранение снимков и сырых замеров распознавания;
+- расчёт средней, максимальной и процентной посещаемости;
+- дашборд со сводкой и динамикой по учебным группам.
 
 ## Архитектура
 
-Три независимых сервиса + база данных, поднимаются через Docker Compose:
+Проект состоит из четырёх контейнеров:
 
+| Сервис | Назначение | Порт |
+|---|---|---:|
+| `frontend` | React-приложение с дашбордом, занятиями и расписанием | `3000` |
+| `backend` | FastAPI API, бизнес-логика, миграции, доступ к БД | `8000` |
+| `recognition` | FastAPI-сервис для обработки потока и разового распознавания | `8001` |
+| `db` | PostgreSQL 16 | `5432` |
+
+```text
+Frontend  ->  Backend API  ->  PostgreSQL
+                 |
+                 v
+          Recognition service
+                 |
+                 v
+          Shared snapshots volume
 ```
-┌─────────────┐      REST/JSON       ┌──────────────────┐
-│  Frontend   │ ───────────────────► │     Backend        │
-│  (React/TS) │ ◄─────────────────── │   (FastAPI)         │
-└─────────────┘                      │  + PostgreSQL       │
-                                      └─────────┬───────────┘
-                                                │ REST/HTTP
-                                      ┌─────────▼───────────┐
-                                      │ Recognition Service   │
-                                      │  (FastAPI + YOLOv8)    │
-                                      │  обработка потока камер│
-                                      └────────────────────────┘
-```
 
-**Backend** — единственная точка доступа к БД. Хранит справочники (группы, преподаватели, дисциплины, аудитории), расписание, факты занятий и результаты распознавания. Отдаёт агрегированную статистику для дашборда.
+Backend является единственной точкой доступа к базе данных. Recognition-сервис не хранит состояние занятий в БД: он получает `session_id` и адрес камеры от backend, обрабатывает поток и отправляет результаты обратно через REST.
 
-**Recognition Service** — stateless-исполнитель. Не хранит список камер самостоятельно: получает от backend `rtsp_url`/`camera_ip` и `session_id` при старте потока, прогоняет кадры через YOLOv8, отправляет результаты (`person_count`, ссылка на кадр) обратно в backend через REST.
+Кадры сохраняются в общий Docker volume `snapshots`. Backend отдаёт их как статические файлы по пути `/media`.
 
-**Frontend** — дашборд, потребляет `/api/v1/stats/*`, позволяет загружать расписание из Excel.
+## Стек
 
-Хранение фрагментов кадров — на первом этапе через общий Docker volume (backend отдаёт файлы как статику), с возможностью перехода на MinIO (S3-совместимое хранилище) при масштабировании.
+| Часть | Технологии |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, Recharts |
+| Backend | Python 3.11, FastAPI, SQLAlchemy, Alembic, Pydantic |
+| Recognition | Python 3.11, FastAPI, Ultralytics YOLOv8, OpenCV |
+| Database | PostgreSQL 16 |
+| Infrastructure | Docker, Docker Compose, Nginx |
 
----
+## Структура проекта
 
-## Стек технологий
-
-##### Frontend
-- React
-- TypeScript
-
-##### Backend
-- Python
-- FastAPI
-- SQLAlchemy + Alembic (миграции)
-
-##### Recognition
-- Python
-- YOLOv8 (Ultralytics)
-- OpenCV
-
-##### Database
-- PostgreSQL
-- MinIO — рассматривается для хранения видеофрагментов при масштабировании (на старте — Docker volume)
-
-##### Infrastructure
-- Docker / Docker Compose
-
----
-
-## Структура репозитория
-
-```
-smart-attendance/
+```text
+edu-attendance-tracker/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/          # роутеры
-│   │   ├── models/           # SQLAlchemy-модели
-│   │   ├── schemas/           # Pydantic-схемы
-│   │   ├── services/           # бизнес-логика
-│   │   ├── core/                 # конфигурация, БД
+│   │   ├── api/v1/              # REST API
+│   │   ├── core/                # настройки и подключение к БД
+│   │   ├── models/              # SQLAlchemy-модели
+│   │   ├── schemas/             # Pydantic-схемы
+│   │   ├── services/            # импорт, статистика, занятия, recognition-клиент
+│   │   ├── import_timetable.py  # CLI-импорт расписания
 │   │   └── main.py
-│   ├── alembic/                     # миграции БД
-│   ├── requirements.txt
-│   └── Dockerfile
-├── recognition/
-│   ├── app/
-│   │   ├── worker.py         # обработка RTSP-потока + инференс
-│   │   ├── model/              # веса YOLOv8
-│   │   └── main.py
-│   ├── requirements.txt
-│   └── Dockerfile
+│   ├── alembic/                 # миграции БД
+│   ├── Dockerfile
+│   └── requirements.txt
 ├── frontend/
 │   ├── src/
-│   └── ...
+│   │   ├── api/                 # клиент API и типы
+│   │   ├── components/          # общие UI-компоненты
+│   │   └── pages/               # дашборд, занятия, расписание
+│   ├── Dockerfile
+│   ├── nginx.conf
+│   └── package.json
+├── recognition/
+│   ├── app/
+│   │   ├── detector.py          # обёртка над YOLOv8
+│   │   ├── worker.py            # обработка видеопотока
+│   │   ├── config.py
+│   │   └── main.py
+│   ├── Dockerfile
+│   └── requirements.txt
 ├── docker-compose.yml
 ├── .env.example
 └── README.md
 ```
 
----
-
-## Модель данных
-
-| Сущность | Описание |
-|---|---|
-| `Group` | Учебная группа (название, курс, факультет) |
-| `Teacher` | Преподаватель |
-| `Discipline` | Дисциплина |
-| `Classroom` | Аудитория (номер, `camera_ip`/`rtsp_url`, вместимость) |
-| `Schedule` | Расписание (группа, преподаватель, дисциплина, аудитория, день недели, время) |
-| `Session` | Конкретное проведённое занятие (дата, статус: scheduled / in_progress / finished) |
-| `DetectionSnapshot` | Сырой замер от recognition-service (timestamp, person_count, ссылка на кадр) |
-| `AttendanceRecord` | Агрегированная посещаемость по занятию (expected_count, detected_avg, attendance_rate) |
-
----
-
-## Требования
-
-- Docker, Docker Compose
-- Python 3.11+ (для локальной разработки без контейнеров)
-- Node.js 18+ (для frontend без контейнеров)
-- (опционально) NVIDIA GPU + CUDA / nvidia-container-toolkit — для ускорения инференса YOLOv8. На CPU nano-версия модели также работает приемлемо при интервале снятия кадров ~20-30 сек
-
----
-
 ## Быстрый старт
 
+Требования:
+
+- Docker и Docker Compose;
+- свободные порты `3000`, `5432`, `8000`, `8001`;
+- при локальном запуске без контейнеров: Python 3.11+ и Node.js 18+.
+
 ```bash
-# 1. Клонировать репозиторий
 git clone <repo_url>
-cd smart-attendance
+cd edu-attendance-tracker
 
-# 2. Настроить переменные окружения
 cp .env.example .env
-# заполнить .env своими значениями
-
-# 3. Запустить все сервисы
-docker-compose up -d
-
-# 4. Применить миграции БД (при первом запуске)
-docker-compose exec backend alembic upgrade head
+docker compose up -d --build
+docker compose exec backend alembic upgrade head
 ```
 
-После запуска:
-- Backend API: `http://localhost:8000`
-- Swagger-документация: `http://localhost:8000/docs`
-- Frontend: `http://localhost:3000`
+После запуска доступны:
 
----
+- frontend: `http://localhost:3000`;
+- backend API: `http://localhost:8000`;
+- backend Swagger UI: `http://localhost:8000/docs`;
+- recognition Swagger UI: `http://localhost:8001/docs`.
+
+## Импорт расписания
+
+Расписание можно загрузить на странице `Расписание` во frontend или через API:
+
+```bash
+curl -F "file=@schedule.xlsx" http://localhost:8000/api/v1/schedule/import
+```
+
+Поддерживаются два формата:
+
+| Формат | Описание |
+|---|---|
+| Институтская сетка | Листы с группами по колонкам, слот пары из двух строк: верхняя строка для белой недели, нижняя для зелёной |
+| Построчный шаблон | Колонки `Группа`, `Преподаватель`, `Дисциплина`, `Аудитория`, `День недели`, `Начало`, `Конец`, `Неделя` |
+
+Шаблон построчного формата можно скачать из интерфейса или по адресу:
+
+```text
+GET http://localhost:8000/api/v1/schedule/template
+```
+
+## Локальная разработка
+
+Backend:
+
+```bash
+cd backend
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Recognition:
+
+```bash
+cd recognition
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --port 8001
+```
 
 ## Переменные окружения
 
-| Переменная | Описание |
+| Переменная | Сервис | Описание |
+|---|---|---|
+| `DB_HOST` | backend | Хост PostgreSQL |
+| `DB_PORT` | backend | Порт PostgreSQL |
+| `DB_NAME` | backend | Имя базы данных |
+| `DB_USER` | backend | Пользователь БД |
+| `DB_PASSWORD` | backend | Пароль БД |
+| `DATABASE_URL` | backend | Полная строка подключения к PostgreSQL |
+| `RECOGNITION_URL` | backend | Адрес recognition-сервиса |
+| `SEMESTER_START` | backend | Понедельник первой учебной недели семестра |
+| `CORS_ORIGINS` | backend | Разрешённые origins для CORS через запятую |
+| `BACKEND_URL` | recognition | Адрес backend для отправки результатов |
+| `SNAPSHOT_INTERVAL` | recognition | Интервал между замерами, сек |
+| `CONFIDENCE_THRESHOLD` | recognition | Порог уверенности детектора |
+| `MODEL_PATH` | recognition | Путь к весам модели |
+| `SNAPSHOT_DIR` | recognition | Каталог для сохранения кадров |
+
+## Основные эндпоинты
+
+Backend:
+
+```text
+GET    /health
+
+GET    /api/v1/groups
+POST   /api/v1/groups
+GET    /api/v1/teachers
+POST   /api/v1/teachers
+GET    /api/v1/disciplines
+POST   /api/v1/disciplines
+GET    /api/v1/classrooms
+POST   /api/v1/classrooms
+
+GET    /api/v1/schedule
+POST   /api/v1/schedule
+DELETE /api/v1/schedule/{item_id}
+GET    /api/v1/schedule/template
+POST   /api/v1/schedule/import
+GET    /api/v1/schedule/week-type
+
+GET    /api/v1/sessions/today
+GET    /api/v1/sessions
+GET    /api/v1/sessions/{session_id}
+POST   /api/v1/sessions/{session_id}/start
+POST   /api/v1/sessions/{session_id}/finish
+POST   /api/v1/sessions/{session_id}/snapshots
+GET    /api/v1/sessions/{session_id}/attendance
+
+GET    /api/v1/stats/summary
+GET    /api/v1/stats/teachers/{teacher_id}
+GET    /api/v1/stats/disciplines/{discipline_id}
+GET    /api/v1/stats/groups/{group_id}
+GET    /api/v1/stats/groups/{group_id}/timeline
+```
+
+Recognition:
+
+```text
+GET  /health
+GET  /streams
+POST /streams/start
+POST /streams/stop
+POST /detect
+```
+
+## Модель данных
+
+| Сущность | Назначение |
 |---|---|
-| `DB_HOST` | Хост PostgreSQL |
-| `DB_PORT` | Порт PostgreSQL |
-| `DB_NAME` | Имя базы данных |
-| `DB_USER` | Пользователь БД |
-| `DB_PASSWORD` | Пароль БД |
-| `DATABASE_URL` | Полная строка подключения (для backend) |
-| `BACKEND_URL` | Адрес backend (используется recognition-service для отправки результатов) |
-| `SNAPSHOT_INTERVAL` | Интервал между кадрами для распознавания, сек |
+| `Group` | Учебная группа, курс, факультет и численность |
+| `Teacher` | Преподаватель |
+| `Discipline` | Дисциплина |
+| `Classroom` | Аудитория, вместимость и адрес камеры |
+| `Schedule` | Плановое занятие: группа, время, аудитория, неделя и тип занятия |
+| `Session` | Конкретное занятие на дату |
+| `DetectionSnapshot` | Сырой замер количества людей на кадре |
+| `AttendanceRecord` | Агрегированная посещаемость по завершённому занятию |
 
----
+## Статус
 
-## API
-
-Полная спецификация доступна через Swagger UI (`/docs`) после запуска backend. Основные группы эндпоинтов:
-
-```
-# Справочники
-GET  /api/v1/groups
-GET  /api/v1/teachers
-GET  /api/v1/disciplines
-GET  /api/v1/classrooms
-
-# Расписание и занятия
-GET  /api/v1/schedule
-GET  /api/v1/sessions/today
-POST /api/v1/sessions/{id}/start
-POST /api/v1/sessions/{id}/finish
-
-# Приём данных от recognition-service
-POST /api/v1/sessions/{id}/snapshots
-GET  /api/v1/sessions/{id}/attendance
-
-# Аналитика для дашборда
-GET  /api/v1/stats/teachers/{id}
-GET  /api/v1/stats/disciplines/{id}
-GET  /api/v1/stats/groups/{id}
-GET  /api/v1/stats/groups/{id}/timeline
-GET  /api/v1/stats/summary
-```
-
----
-
-## Статус разработки
-
-- [x] Проектирование архитектуры и API-контрактов
-- [ ] Backend: справочники, расписание, миграции
-- [ ] Recognition service: обработка RTSP + инференс YOLOv8
-- [ ] Приём и агрегация данных посещаемости
-- [ ] Frontend: дашборд статистики
-- [ ] Загрузка расписания из Excel
-- [ ] Docker Compose: полная сборка всех сервисов
-
----
+- backend API, модели и миграции реализованы;
+- импорт расписания из Excel реализован;
+- расчёт белой и зелёной недели реализован;
+- recognition-сервис умеет работать с потоком и разовыми изображениями;
+- frontend содержит дашборд, расписание и список занятий;
+- контейнерная сборка описана через Docker Compose.
 
 ## Команда
 
-- Балалыкин М.Г. — teamlead, backend
-- Матвейчев И. В. - recognition, backend
-- Плешкова Д. С. - database, backend
-- Попова Ю. А. - frontend
+| Участник | Зона ответственности |
+|---|---|
+| Балалыкин М. Г. | teamlead, backend |
+| Матвейчев И. В. | recognition, backend |
+| Плешкова Д. С. | database, backend |
+| Попова Ю. А. | frontend |
 
----
-
-*Проект выполнен в рамках производственной практики.*
+Проект выполнен в рамках производственной практики.
