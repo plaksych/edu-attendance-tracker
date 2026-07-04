@@ -21,11 +21,19 @@ router = APIRouter(prefix="/schedule", tags=["Расписание"])
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 
-@router.get("", response_model=list[ScheduleRead])
+@router.get(
+    "",
+    response_model=list[ScheduleRead],
+    summary="Получить расписание",
+    description=(
+        "Возвращает элементы расписания с вложенными справочниками. "
+        "Можно фильтровать по группе, преподавателю и ISO-дню недели."
+    ),
+)
 def list_schedule(
-    group_id: int | None = Query(default=None),
-    teacher_id: int | None = Query(default=None),
-    weekday: int | None = Query(default=None, ge=1, le=7),
+    group_id: int | None = Query(default=None, description="ID учебной группы"),
+    teacher_id: int | None = Query(default=None, description="ID преподавателя"),
+    weekday: int | None = Query(default=None, ge=1, le=7, description="ISO-день недели: 1 — понедельник, 7 — воскресенье"),
     db: DbSession = Depends(get_db),
 ):
     query = select(Schedule).options(
@@ -44,7 +52,16 @@ def list_schedule(
     return db.scalars(query).unique().all()
 
 
-@router.post("", response_model=ScheduleRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=ScheduleRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Создать занятие в расписании",
+    description="Добавляет одну запись расписания. Слот группы уникален по дню, времени начала и типу недели.",
+    responses={
+        409: {"description": "Слот уже занят или указаны несуществующие справочники"},
+    },
+)
 def create_schedule_item(payload: ScheduleCreate, db: DbSession = Depends(get_db)):
     item = Schedule(**payload.model_dump())
     db.add(item)
@@ -60,7 +77,15 @@ def create_schedule_item(payload: ScheduleCreate, db: DbSession = Depends(get_db
     return item
 
 
-@router.delete("/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete(
+    "/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Удалить запись расписания",
+    description="Удаляет плановое занятие из расписания по ID.",
+    responses={
+        404: {"description": "Запись расписания не найдена"},
+    },
+)
 def delete_schedule_item(item_id: int, db: DbSession = Depends(get_db)):
     item = db.get(Schedule, item_id)
     if item is None:
@@ -69,7 +94,17 @@ def delete_schedule_item(item_id: int, db: DbSession = Depends(get_db)):
     db.commit()
 
 
-@router.get("/template")
+@router.get(
+    "/template",
+    summary="Скачать Excel-шаблон расписания",
+    description="Возвращает построчный `.xlsx`-шаблон для загрузки расписания через `/schedule/import`.",
+    responses={
+        200: {
+            "description": "Excel-файл с шаблоном расписания",
+            "content": {XLSX_MIME: {}},
+        },
+    },
+)
 def download_template():
     return Response(
         content=schedule_import.build_template(),
@@ -78,7 +113,18 @@ def download_template():
     )
 
 
-@router.post("/import", response_model=ScheduleImportResult)
+@router.post(
+    "/import",
+    response_model=ScheduleImportResult,
+    summary="Импортировать расписание из Excel",
+    description=(
+        "Принимает `.xlsx` и автоматически определяет формат: институтская сетка "
+        "или простой построчный шаблон. Создаёт недостающие справочники и записи расписания."
+    ),
+    responses={
+        400: {"description": "Файл не является `.xlsx` или содержит некорректные данные"},
+    },
+)
 def import_schedule(file: UploadFile = File(...), db: DbSession = Depends(get_db)):
     """Импорт расписания из .xlsx.
 
@@ -97,8 +143,15 @@ def import_schedule(file: UploadFile = File(...), db: DbSession = Depends(get_db
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
 
 
-@router.get("/week-type", response_model=WeekTypeRead)
-def get_week_type(target_date: date | None = Query(default=None, alias="date")):
+@router.get(
+    "/week-type",
+    response_model=WeekTypeRead,
+    summary="Определить тип учебной недели",
+    description="Возвращает белую или зелёную неделю для даты относительно `SEMESTER_START`.",
+)
+def get_week_type(
+    target_date: date | None = Query(default=None, alias="date", description="Дата проверки. Если не указана, используется текущая дата."),
+):
     """Белая или зелёная неделя для даты (по умолчанию — сегодня)."""
     resolved = target_date or date.today()
     return WeekTypeRead(date=resolved, week_type=week_type_for_date(resolved))

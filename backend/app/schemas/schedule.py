@@ -1,4 +1,6 @@
-from datetime import date, time
+from __future__ import annotations
+
+from datetime import date as Date, time
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -7,15 +9,51 @@ from app.schemas.catalog import ClassroomRead, DisciplineRead, GroupRead, Teache
 
 
 class ScheduleCreate(BaseModel):
-    group_id: int
-    teacher_id: int | None = None
-    discipline_id: int
-    classroom_id: int | None = None
-    weekday: int = Field(ge=1, le=7, description="ISO: 1 — понедельник, 7 — воскресенье")
-    starts_at: time
-    ends_at: time
-    week_type: WeekType = WeekType.every
-    lesson_type: str | None = None
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "group_id": 1,
+                "teacher_id": 1,
+                "discipline_id": 1,
+                "classroom_id": 1,
+                "weekday": 1,
+                "starts_at": "09:00:00",
+                "ends_at": "10:30:00",
+                "week_type": "every",
+                "lesson_type": "лек.",
+            }
+        }
+    )
+
+    group_id: int = Field(description="ID учебной группы", examples=[1])
+    teacher_id: int | None = Field(
+        default=None,
+        description="ID преподавателя. Может отсутствовать в исходном расписании.",
+        examples=[1],
+    )
+    discipline_id: int = Field(description="ID дисциплины", examples=[1])
+    classroom_id: int | None = Field(
+        default=None,
+        description="ID аудитории. Если аудитория не указана, запуск камеры невозможен.",
+        examples=[1],
+    )
+    weekday: int = Field(
+        ge=1,
+        le=7,
+        description="ISO-день недели: 1 — понедельник, 7 — воскресенье",
+        examples=[1],
+    )
+    starts_at: time = Field(description="Время начала занятия", examples=["09:00:00"])
+    ends_at: time = Field(description="Время окончания занятия", examples=["10:30:00"])
+    week_type: WeekType = Field(
+        default=WeekType.every,
+        description="Тип недели: каждую неделю, белая или зелёная",
+    )
+    lesson_type: str | None = Field(
+        default=None,
+        description="Тип занятия из расписания: лек., пр., лаб.",
+        examples=["лек."],
+    )
 
     @model_validator(mode="after")
     def check_time_range(self) -> "ScheduleCreate":
@@ -40,11 +78,14 @@ class ScheduleRead(BaseModel):
 
 
 class ScheduleImportResult(BaseModel):
-    created: int
-    skipped: int
-    errors: list[str]
+    created: int = Field(description="Количество созданных записей расписания", examples=[42])
+    skipped: int = Field(description="Количество пропущенных дублей", examples=[3])
+    errors: list[str] = Field(
+        description="Ошибки по строкам или ячейкам, которые не удалось импортировать",
+        examples=[["Строка 8: не указана дисциплина"]],
+    )
 
 
 class WeekTypeRead(BaseModel):
-    date: date
-    week_type: WeekType
+    date: Date = Field(description="Дата проверки", examples=["2026-02-09"])
+    week_type: WeekType = Field(description="Тип учебной недели")
