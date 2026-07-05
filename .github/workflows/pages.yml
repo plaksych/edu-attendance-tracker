@@ -36,10 +36,9 @@ jobs:
         run: npm ci
 
       - name: Build static frontend
-        run: npm run build
+        run: npm run build -- --base=/edu-attendance-tracker/
         env:
           VITE_STATIC_DATA: "true"
-          VITE_BASE_PATH: /edu-attendance-tracker/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5

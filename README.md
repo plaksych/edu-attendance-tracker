@@ -225,7 +225,7 @@ backend не нужен: приложение читает `frontend/public/demo
 ```bash
 PYTHONPATH=backend .venv/bin/python scripts/generate_demo_data.py ikn-bak.xlsx frontend/public/demo-data.json
 cd frontend
-VITE_STATIC_DATA=true VITE_BASE_PATH=/ npm run build
+VITE_STATIC_DATA=true npm run build -- --base=/
 ```
 
 Workflow `.github/workflows/pages.yml` собирает frontend при push в `develop` и
