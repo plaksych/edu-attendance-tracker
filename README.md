@@ -229,8 +229,10 @@ VITE_STATIC_DATA=true npm run build -- --base=/
 ```
 
 Workflow `.github/workflows/pages.yml` собирает frontend при push в `develop` и
-публикует `frontend/dist` через GitHub Pages. Для репозитория нужно включить
-Pages source `GitHub Actions` в настройках GitHub.
+публикует `frontend/dist` через GitHub Pages. В репозитории нужно один раз
+включить Pages source `GitHub Actions` в настройках GitHub. Если хочется, чтобы
+workflow сам включал Pages, добавьте repository secret `PAGES_ADMIN_TOKEN` с
+правами управления Pages/administration для этого репозитория.
 
 ## Настройки
 
