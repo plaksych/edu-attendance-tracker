@@ -10,10 +10,6 @@ class Settings(BaseSettings):
     app_name: str = "Educational Attendance Tracker"
     api_v1_prefix: str = "/api/v1"
 
-    # Понедельник первой учебной недели семестра; первая неделя считается белой.
-    # Если в вузе семестр начался с зелёной, сдвиньте дату на неделю назад.
-    semester_start: date = date(2026, 2, 9)
-
     db_host: str = "localhost"
     db_port: int = 5432
     db_name: str = "attendance"
@@ -21,13 +17,44 @@ class Settings(BaseSettings):
     db_password: str = "attendance"
     database_url: str | None = None
 
-    # Адрес recognition-сервиса, куда backend отправляет команды start/stop потока
-    recognition_url: str = "http://localhost:8001"
-
-    # Каталог с кадрами; общий volume с recognition-сервисом
-    media_dir: str = "./media"
-
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
+
+    # Часовой пояс расписания: время пар в БД хранится как локальное
+    timezone: str = "Europe/Moscow"
+
+    # Понедельник первой учебной недели семестра; первая неделя считается белой.
+    # Если в вузе семестр начался с зелёной, сдвиньте дату на неделю назад.
+    semester_start: date = date(2026, 2, 9)
+
+    # --- MinIO ---
+    minio_endpoint: str = "localhost:9000"
+    # Адрес MinIO, доступный из браузера; на нём подписываются presigned URL.
+    # Если не задан, используется minio_endpoint.
+    minio_public_endpoint: str | None = None
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket: str = "attendance-clips"
+    minio_secure: bool = False
+    presign_expiry_seconds: int = 900
+
+    # Сроки хранения медиа; должны совпадать с lifecycle policy бакета
+    original_retention_days: int = 30
+    annotated_retention_days: int = 90
+
+    # --- Measurement Scheduler ---
+    scheduler_enabled: bool = True
+    scheduler_interval_seconds: int = 30
+    # На сколько дней вперёд создаются занятия и замеры
+    schedule_horizon_days: int = 14
+    # Отступ замеров от границ занятия: после начала и до конца
+    measurement_offset_minutes: int = 15
+    capture_duration_seconds: int = 20
+    # Через сколько минут после planned_at незабранное задание записи считается потерянным
+    capture_pending_timeout_minutes: int = 10
+    # Максимум попыток для заданий записи и распознавания (согласовано с воркерами)
+    queue_max_attempts: int = 3
+    # Порог уверенности, ниже которого в режиме primary_backup берётся резервная камера
+    backup_confidence_threshold: float = 0.3
 
     @property
     def sqlalchemy_url(self) -> str:

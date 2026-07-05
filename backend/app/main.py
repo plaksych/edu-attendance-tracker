@@ -1,13 +1,14 @@
 import logging
-from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app.api.v1 import router as api_v1_router
 from app.core.config import settings
+from app.core.object_storage import ensure_bucket
+from app.services.scheduler import SchedulerThread
 
 
 class HealthRead(BaseModel):
@@ -21,7 +22,11 @@ OPENAPI_TAGS = [
     },
     {
         "name": "Справочники",
-        "description": "Группы, преподаватели, дисциплины и аудитории с адресами камер.",
+        "description": "Группы, преподаватели, дисциплины и аудитории с режимом объединения камер.",
+    },
+    {
+        "name": "Камеры",
+        "description": "Справочник камер и привязка камер к аудиториям.",
     },
     {
         "name": "Расписание",
@@ -29,7 +34,11 @@ OPENAPI_TAGS = [
     },
     {
         "name": "Занятия",
-        "description": "Формирование занятий на дату, запуск обработки камеры, приём замеров и расчёт посещаемости.",
+        "description": "Занятия на дату, состояние двух замеров каждой камеры и итог посещаемости.",
+    },
+    {
+        "name": "Медиа",
+        "description": "Временные presigned-ссылки MinIO на исходные ролики и размеченные кадры.",
     },
     {
         "name": "Статистика",
@@ -43,10 +52,14 @@ Backend API системы контроля посещаемости.
 Фактический поток данных:
 
 1. Frontend работает с backend через REST API.
-2. Backend хранит справочники, расписание, занятия, замеры и агрегированную посещаемость в PostgreSQL.
-3. При старте занятия backend отправляет recognition-сервису `session_id` и адрес камеры аудитории.
-4. Recognition-сервис сохраняет размеченные кадры в общий volume и отправляет результаты обратно в backend.
-5. Backend отдаёт сохранённые кадры как статику по `/media`.
+2. Measurement Scheduler внутри backend создаёт занятия на 14 дней вперёд и по два замера
+   на занятие: через 15 минут после начала и за 15 минут до конца.
+3. Для каждого замера создаются задания записи по камерам аудитории; Capture Manager
+   забирает их из PostgreSQL, пишет ролики с RTSP и загружает их в MinIO.
+4. Recognition-воркеры берут задания распознавания из очереди, считают людей локальной
+   моделью YOLO и сохраняют агрегаты и размеченный кадр.
+5. Backend объединяет результаты камер и двух замеров в итог занятия и выдаёт frontend
+   временные presigned-ссылки на медиа.
 """
 
 logging.basicConfig(
@@ -54,13 +67,33 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        ensure_bucket()
+    except Exception:
+        logger.exception("Не удалось инициализировать бакет MinIO — медиа будут недоступны")
+
+    scheduler = SchedulerThread() if settings.scheduler_enabled else None
+    if scheduler is not None:
+        scheduler.start()
+    yield
+    if scheduler is not None:
+        scheduler.stop()
+        scheduler.join(timeout=settings.scheduler_interval_seconds + 5)
+
+
 app = FastAPI(
     title=settings.app_name,
     description=APP_DESCRIPTION,
-    version="1.0.0",
+    version="2.0.0",
     openapi_tags=OPENAPI_TAGS,
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -71,11 +104,6 @@ app.add_middleware(
 )
 
 app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
-
-# Кадры с камер: recognition-сервис пишет в общий volume, backend отдаёт как статику
-media_dir = Path(settings.media_dir)
-media_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/media", StaticFiles(directory=media_dir), name="media")
 
 
 @app.get(

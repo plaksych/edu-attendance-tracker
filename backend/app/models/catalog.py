@@ -1,7 +1,8 @@
-from sqlalchemy import Integer, String, UniqueConstraint
+from sqlalchemy import Enum, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.enums import CameraAggregationMode
 
 
 class Group(Base):
@@ -45,7 +46,14 @@ class Classroom(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     capacity: Mapped[int | None] = mapped_column(Integer)
-    # RTSP-адрес камеры аудитории; если не задан, распознавание для аудитории недоступно
-    camera_url: Mapped[str | None] = mapped_column(String(500))
+    aggregation_mode: Mapped[CameraAggregationMode] = mapped_column(
+        Enum(CameraAggregationMode, name="camera_aggregation_mode"),
+        default=CameraAggregationMode.single,
+    )
 
     schedule_items: Mapped[list["Schedule"]] = relationship(back_populates="classroom")  # noqa: F821
+    camera_links: Mapped[list["ClassroomCamera"]] = relationship(  # noqa: F821
+        back_populates="classroom",
+        cascade="all, delete-orphan",
+        order_by="ClassroomCamera.priority",
+    )

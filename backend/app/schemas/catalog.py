@@ -1,5 +1,8 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.enums import CameraAggregationMode
+from app.schemas.cameras import ClassroomCameraRead
+
 
 class GroupBase(BaseModel):
     name: str = Field(
@@ -38,6 +41,16 @@ class GroupCreate(GroupBase):
                 "students_count": 28,
             }
         }
+    )
+
+
+class GroupUpdate(BaseModel):
+    course: int | None = Field(default=None, ge=1, le=6)
+    faculty: str | None = None
+    students_count: int | None = Field(
+        default=None,
+        ge=0,
+        description="Численность группы; влияет на расчёт attendance_rate",
     )
 
 
@@ -94,9 +107,7 @@ class DisciplineBase(BaseModel):
 
 
 class DisciplineCreate(DisciplineBase):
-    model_config = ConfigDict(
-        json_schema_extra={"example": {"name": "Базы данных"}}
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"name": "Базы данных"}})
 
 
 class DisciplineRead(DisciplineBase):
@@ -118,26 +129,35 @@ class ClassroomBase(BaseModel):
         description="Вместимость аудитории",
         examples=[40],
     )
-    camera_url: str | None = Field(
-        default=None,
-        description="RTSP/HTTP URL камеры или путь к видеофайлу для отладки",
-        examples=["rtsp://user:password@192.168.1.10:554/stream1"],
+    aggregation_mode: CameraAggregationMode = Field(
+        default=CameraAggregationMode.single,
+        description=(
+            "Как объединять результаты камер: single — одна камера, "
+            "maximum — пересекающиеся зоны, sum — непересекающиеся зоны, "
+            "primary_backup — основная и резервная"
+        ),
     )
 
 
 class ClassroomCreate(ClassroomBase):
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "number": "302",
-                "capacity": 40,
-                "camera_url": "rtsp://user:password@192.168.1.10:554/stream1",
-            }
+            "example": {"number": "302", "capacity": 40, "aggregation_mode": "single"}
         }
     )
 
 
+class ClassroomUpdate(BaseModel):
+    capacity: int | None = Field(default=None, ge=1)
+    aggregation_mode: CameraAggregationMode | None = None
+
+
 class ClassroomRead(ClassroomBase):
-    model_config = ConfigDict(from_attributes=True)
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
 
     id: int
+    cameras: list[ClassroomCameraRead] = Field(
+        default_factory=list,
+        validation_alias="camera_links",
+        description="Камеры аудитории с ролями и приоритетами",
+    )

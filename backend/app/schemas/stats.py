@@ -10,12 +10,22 @@ class SummaryStats(BaseModel):
     teachers: int = Field(description="Количество преподавателей", examples=[24])
     disciplines: int = Field(description="Количество дисциплин", examples=[18])
     classrooms: int = Field(description="Количество аудиторий", examples=[10])
+    cameras: int = Field(description="Количество камер", examples=[14])
     sessions_total: int = Field(description="Всего сформированных занятий", examples=[120])
     sessions_today: int = Field(description="Занятий на текущую дату", examples=[8])
     sessions_finished: int = Field(description="Завершённых занятий", examples=[56])
     avg_attendance_rate: float | None = Field(
         description="Средняя посещаемость по завершённым занятиям",
         examples=[0.81],
+    )
+    records_complete: int = Field(
+        description="Занятий с двумя успешными замерами", examples=[48]
+    )
+    records_partial: int = Field(
+        description="Занятий с одним успешным замером", examples=[6]
+    )
+    records_failed: int = Field(
+        description="Занятий без успешных замеров", examples=[2]
     )
 
 
@@ -41,13 +51,22 @@ class EntityStats(BaseModel):
         description="Среднее число найденных людей",
         examples=[22.1],
     )
+    records_complete: int = Field(
+        description="Занятий с двумя успешными замерами", examples=[28]
+    )
+    records_partial: int = Field(
+        description="Занятий с одним успешным замером", examples=[3]
+    )
+    records_failed: int = Field(
+        description="Занятий без успешных замеров", examples=[1]
+    )
     breakdown: list[BreakdownItem] = Field(description="Разбивка по связанным сущностям")
 
 
 class TimelinePoint(BaseModel):
     date: Date = Field(description="Дата занятий", examples=["2026-07-04"])
     avg_rate: float | None = Field(description="Средняя посещаемость за дату", examples=[0.86])
-    detected_avg: float | None = Field(
+    avg_detected: float | None = Field(
         description="Среднее число найденных людей за дату",
         examples=[24.2],
     )

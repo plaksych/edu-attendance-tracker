@@ -1,31 +1,14 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import DateTime, Enum, Float, ForeignKey, Integer, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-
-
-class DetectionSnapshot(Base):
-    """Сырой замер от recognition-сервиса: сколько человек видно на кадре."""
-
-    __tablename__ = "detection_snapshots"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    session_id: Mapped[int] = mapped_column(
-        ForeignKey("sessions.id", ondelete="CASCADE"), index=True
-    )
-    captured_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    person_count: Mapped[int] = mapped_column(Integer)
-    confidence: Mapped[float | None] = mapped_column(Float)
-    # Путь к кадру относительно media-каталога, например "42/20260703_101500.jpg"
-    frame_path: Mapped[str | None] = mapped_column(String(500))
-
-    session: Mapped["Session"] = relationship(back_populates="snapshots")  # noqa: F821
+from app.models.enums import AttendanceCalculationStatus
 
 
 class AttendanceRecord(Base):
-    """Агрегированная посещаемость по завершённому занятию."""
+    """Итог занятия, собранный из двух замеров."""
 
     __tablename__ = "attendance_records"
 
@@ -34,10 +17,16 @@ class AttendanceRecord(Base):
         ForeignKey("sessions.id", ondelete="CASCADE"), unique=True
     )
     expected_count: Mapped[int] = mapped_column(Integer)
-    detected_avg: Mapped[float] = mapped_column(Float)
-    detected_max: Mapped[int] = mapped_column(Integer)
-    snapshots_count: Mapped[int] = mapped_column(Integer)
-    # Доля присутствовавших от численности группы, 0..1
+    after_start_count: Mapped[int | None] = mapped_column(Integer)
+    before_end_count: Mapped[int | None] = mapped_column(Integer)
+    detected_average: Mapped[float | None] = mapped_column(Float)
+    detected_max: Mapped[int | None] = mapped_column(Integer)
     attendance_rate: Mapped[float | None] = mapped_column(Float)
+    calculation_status: Mapped[AttendanceCalculationStatus] = mapped_column(
+        Enum(AttendanceCalculationStatus, name="attendance_calculation_status")
+    )
+    calculated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     session: Mapped["Session"] = relationship(back_populates="attendance")  # noqa: F821
