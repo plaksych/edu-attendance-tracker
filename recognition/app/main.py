@@ -1,182 +1,133 @@
+"""Воркер очереди распознавания: claim → обработка → фиксация результата."""
+
 import logging
-from contextlib import asynccontextmanager
+import signal
+import threading
 
-import cv2
-import numpy as np
-from fastapi import FastAPI, File, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from app.config import settings
+from app.db import ClaimedJob, Database
+from app.detector import PersonDetector
+from app.processor import JobProcessor
+from app.storage import ObjectStorage
 
-from app.detector import detector
-from app.worker import manager
+logger = logging.getLogger(__name__)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-)
-
-OPENAPI_TAGS = [
-    {
-        "name": "Служебное",
-        "description": "Проверка состояния recognition-сервиса.",
-    },
-    {
-        "name": "Потоки",
-        "description": "Управление фоновыми обработчиками RTSP/видеофайлов для занятий.",
-    },
-    {
-        "name": "Распознавание",
-        "description": "Разовый подсчёт людей на загруженном изображении.",
-    },
-]
-
-APP_DESCRIPTION = """
-Recognition-сервис получает команды от backend и выполняет подсчёт людей через YOLOv8.
-
-Основной сценарий:
-
-1. Backend вызывает `/streams/start` с `session_id` и адресом камеры.
-2. Сервис запускает фоновый worker, периодически берёт кадр из потока и сохраняет размеченный jpg.
-3. Worker отправляет результат в backend на `/api/v1/sessions/{session_id}/snapshots`.
-4. Backend завершает занятие через `/streams/stop` и рассчитывает посещаемость.
-"""
+stop_event = threading.Event()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    yield
-    manager.stop_all()
+def _handle_signal(signum: int, _frame: object) -> None:
+    logger.info("Получен сигнал %s, останов после текущего задания", signum)
+    stop_event.set()
 
 
-app = FastAPI(
-    title="Attendance Recognition Service",
-    description=APP_DESCRIPTION,
-    version="1.0.0",
-    lifespan=lifespan,
-    openapi_tags=OPENAPI_TAGS,
-    docs_url="/docs",
-    redoc_url="/redoc",
-)
+def _heartbeat_loop(db: Database, job_id: int, stop: threading.Event) -> None:
+    """Продлевает lease задания, пока идёт обработка."""
+    while not stop.wait(settings.heartbeat_interval_seconds):
+        try:
+            if not db.heartbeat(job_id):
+                logger.warning(
+                    "Heartbeat задания %s отклонён: задание больше не за воркером %s",
+                    job_id,
+                    settings.worker_id,
+                )
+                return
+        except Exception:
+            logger.exception("Ошибка heartbeat задания %s", job_id)
 
 
-class StreamStartRequest(BaseModel):
-    session_id: int = Field(description="ID занятия в backend", examples=[12])
-    rtsp_url: str = Field(
-        min_length=1,
-        description="RTSP/HTTP-адрес камеры или путь к видеофайлу",
-        examples=["rtsp://user:password@192.168.1.10:554/stream1"],
-    )
-
-
-class StreamStopRequest(BaseModel):
-    session_id: int = Field(description="ID занятия, поток которого нужно остановить", examples=[12])
-
-
-class HealthRead(BaseModel):
-    status: str = Field(description="Состояние сервиса", examples=["ok"])
-
-
-class StreamInfo(BaseModel):
-    session_id: int = Field(description="ID занятия в обработке", examples=[12])
-    source: str = Field(description="Источник видео", examples=["rtsp://camera/stream1"])
-
-
-class StreamActionRead(BaseModel):
-    status: str = Field(description="Результат команды", examples=["started"])
-
-
-class DetectionRead(BaseModel):
-    person_count: int = Field(description="Количество найденных людей", examples=[24])
-    confidence: float | None = Field(
-        description="Средняя уверенность по найденным людям",
-        examples=[0.82],
-    )
-
-
-@app.get(
-    "/health",
-    response_model=HealthRead,
-    tags=["Служебное"],
-    summary="Проверить состояние recognition-сервиса",
-    description="Возвращает `ok`, если сервис запущен и отвечает на HTTP-запросы.",
-)
-def health() -> HealthRead:
-    return HealthRead(status="ok")
-
-
-@app.get(
-    "/streams",
-    response_model=list[StreamInfo],
-    tags=["Потоки"],
-    summary="Получить активные потоки",
-    description="Возвращает список фоновых workers, которые сейчас обрабатывают камеры или видеофайлы.",
-)
-def list_streams() -> list[dict]:
-    return manager.active()
-
-
-@app.post(
-    "/streams/start",
-    response_model=StreamActionRead,
-    status_code=status.HTTP_202_ACCEPTED,
-    tags=["Потоки"],
-    summary="Запустить обработку потока",
-    description="Создаёт фоновый worker для занятия. Повторный запуск для активного `session_id` вернёт 409.",
-    responses={
-        409: {"description": "Поток для занятия уже обрабатывается"},
-    },
-)
-def start_stream(payload: StreamStartRequest) -> StreamActionRead:
-    started = manager.start(payload.session_id, payload.rtsp_url)
-    if not started:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"Поток для занятия {payload.session_id} уже обрабатывается",
+def _fail_job(db: Database, job: ClaimedJob, error: str, permanent: bool = False) -> None:
+    try:
+        db.fail_job(job.id, job.attempts, error, permanent=permanent)
+    except Exception:
+        logger.exception(
+            "Не удалось зафиксировать ошибку задания %s; его вернёт в очередь backend "
+            "по истечении lease",
+            job.id,
         )
-    return StreamActionRead(status="started")
 
 
-@app.post(
-    "/streams/stop",
-    response_model=StreamActionRead,
-    tags=["Потоки"],
-    summary="Остановить обработку потока",
-    description="Останавливает worker по `session_id`. Если активного потока нет, возвращает 404.",
-    responses={
-        404: {"description": "Активный поток для занятия не найден"},
-    },
-)
-def stop_stream(payload: StreamStopRequest) -> StreamActionRead:
-    stopped = manager.stop(payload.session_id)
-    if not stopped:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            f"Активный поток для занятия {payload.session_id} не найден",
-        )
-    return StreamActionRead(status="stopped")
-
-
-@app.post(
-    "/detect",
-    response_model=DetectionRead,
-    tags=["Распознавание"],
-    summary="Распознать людей на изображении",
-    description="Принимает изображение, запускает детектор и возвращает количество найденных людей.",
-    responses={
-        400: {"description": "Файл не удалось прочитать как изображение"},
-    },
-)
-async def detect_image(
-    file: UploadFile = File(..., description="Изображение аудитории для разового распознавания"),
-) -> DetectionRead:
-    """Разовый подсчёт людей на загруженном изображении. Удобно для проверки модели."""
-    data = await file.read()
-    frame = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
-    if frame is None:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Не удалось прочитать изображение"
-        )
-    result = detector.detect(frame)
-    return DetectionRead(
-        person_count=result.person_count,
-        confidence=result.avg_confidence,
+def _process_job(
+    db: Database, heartbeat_db: Database, processor: JobProcessor, job: ClaimedJob
+) -> None:
+    logger.info(
+        "Задание %s принято (запись %s, попытка %s)",
+        job.id,
+        job.camera_capture_id,
+        job.attempts,
     )
+    try:
+        context = db.fetch_capture_context(job.camera_capture_id)
+    except Exception as exc:
+        logger.exception("Не удалось получить контекст записи для задания %s", job.id)
+        _fail_job(db, job, f"ошибка чтения контекста записи: {exc}")
+        return
+    if context is None:
+        _fail_job(db, job, "запись камеры не найдена", permanent=True)
+        return
+    if context.original_object_key is None:
+        _fail_job(db, job, "нет исходного видео", permanent=True)
+        return
+
+    heartbeat_stop = threading.Event()
+    heartbeat_thread = threading.Thread(
+        target=_heartbeat_loop,
+        args=(heartbeat_db, job.id, heartbeat_stop),
+        name=f"heartbeat-{job.id}",
+        daemon=True,
+    )
+    heartbeat_thread.start()
+    try:
+        result = processor.process(job, context)
+    except Exception as exc:
+        logger.exception("Задание %s завершилось ошибкой", job.id)
+        _fail_job(db, job, str(exc) or type(exc).__name__)
+        return
+    finally:
+        heartbeat_stop.set()
+        heartbeat_thread.join()
+
+    try:
+        db.complete_job(job.id, result)
+    except Exception as exc:
+        logger.exception("Не удалось сохранить результат задания %s", job.id)
+        _fail_job(db, job, f"ошибка сохранения результата: {exc}")
+        return
+    logger.info("Задание %s выполнено", job.id)
+
+
+def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    signal.signal(signal.SIGTERM, _handle_signal)
+    signal.signal(signal.SIGINT, _handle_signal)
+
+    db = Database(settings.database_url)
+    # Отдельное соединение: heartbeat живёт в фоновом потоке во время обработки
+    heartbeat_db = Database(settings.database_url)
+    storage = ObjectStorage()
+    storage.check_bucket()
+    processor = JobProcessor(storage=storage, detector=PersonDetector(settings.model_path))
+
+    logger.info("Воркер %s запущен", settings.worker_id)
+    try:
+        while not stop_event.is_set():
+            try:
+                job = db.claim_job()
+            except Exception:
+                logger.exception("Не удалось забрать задание из очереди")
+                stop_event.wait(settings.poll_interval_seconds)
+                continue
+            if job is None:
+                stop_event.wait(settings.poll_interval_seconds)
+                continue
+            _process_job(db, heartbeat_db, processor, job)
+    finally:
+        db.close()
+        heartbeat_db.close()
+    logger.info("Воркер %s остановлен", settings.worker_id)
+
+
+if __name__ == "__main__":
+    main()
