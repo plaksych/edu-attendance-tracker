@@ -161,7 +161,9 @@ def _split_room_text(text: str) -> tuple[str | None, str | None]:
     """«9-406 лаб.» -> («9-406», «лаб.»); «спортзал пр.» -> («спортзал», «пр.»)"""
     if not text:
         return None, None
-    tokens = text.split()
+    # В конвертированных из PDF файлах встречаются мусорные слэши-переносы
+    tokens = [token.strip("/") for token in text.split()]
+    tokens = [token for token in tokens if token]
     if tokens and tokens[-1].rstrip(".").lower() in LESSON_TYPES:
         lesson_type = tokens[-1].rstrip(".") + "."
         room = " ".join(tokens[:-1])

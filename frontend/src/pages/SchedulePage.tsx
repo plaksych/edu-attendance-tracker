@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { api } from '../api/client'
+import { api, isStaticData } from '../api/client'
 import type { Group, ImportResult, ScheduleItem, WeekType } from '../api/types'
 import { WeekBadge } from '../components/WeekBadge'
+import { fmtTime } from '../lib/format'
 
 const WEEKDAYS = [
   'Понедельник',
@@ -45,11 +46,11 @@ export function SchedulePage() {
     try {
       const result = await api.importSchedule(file)
       setImportResult(result)
-      const refreshed = await api.getSchedule(
-        groupFilter === '' ? undefined : { group_id: groupFilter },
-      )
-      setItems(refreshed)
-      const refreshedGroups = await api.getGroups()
+      const [refreshedItems, refreshedGroups] = await Promise.all([
+        api.getSchedule(groupFilter === '' ? undefined : { group_id: groupFilter }),
+        api.getGroups(),
+      ])
+      setItems(refreshedItems)
       setGroups(refreshedGroups)
     } catch (e) {
       setError((e as Error).message)
@@ -73,32 +74,11 @@ export function SchedulePage() {
   return (
     <>
       <header className="page-header">
-        <h1>Расписание</h1>
-        <p>Недельная сетка занятий; загрузка из Excel</p>
-      </header>
-
-      <div className="card section">
-        <div className="upload">
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".xlsx"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const file = e.target.files?.[0]
-              if (file) handleUpload(file)
-            }}
-          />
-          <button
-            className="btn"
-            disabled={uploading}
-            onClick={() => fileInput.current?.click()}
-          >
-            {uploading ? 'Загрузка…' : 'Загрузить из Excel'}
-          </button>
-          <a className="btn btn--secondary" href="/api/v1/schedule/template" download>
-            Скачать шаблон
-          </a>
+        <div>
+          <h1>Расписание</h1>
+          <p>Недельная сетка занятий с чередованием белой и зелёной недели</p>
+        </div>
+        <div className="page-header__actions">
           <select
             className="select"
             value={groupFilter}
@@ -122,78 +102,105 @@ export function SchedulePage() {
             <option value="white">Белая неделя</option>
             <option value="green">Зелёная неделя</option>
           </select>
+          {!isStaticData && (
+            <>
+              <a className="btn btn--ghost" href="/api/v1/schedule/template" download>
+                Шаблон
+              </a>
+              <input
+                ref={fileInput}
+                type="file"
+                accept=".xlsx"
+                style={{ display: 'none' }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleUpload(file)
+                }}
+              />
+              <button className="btn" disabled={uploading} onClick={() => fileInput.current?.click()}>
+                {uploading ? 'Загрузка…' : 'Загрузить из Excel'}
+              </button>
+            </>
+          )}
         </div>
+      </header>
 
-        {importResult && (
-          <div style={{ marginTop: 14 }}>
-            <div className="alert alert--success" style={{ marginBottom: 0 }}>
-              Импорт завершён: добавлено {importResult.created}, пропущено дублей{' '}
-              {importResult.skipped}
-            </div>
-            {importResult.errors.length > 0 && (
-              <ul className="upload__errors">
-                {importResult.errors.map((err) => (
+      {importResult && (
+        <>
+          <div className="alert alert--success">
+            Импорт завершён: добавлено {importResult.created}, пропущено дублей{' '}
+            {importResult.skipped}
+          </div>
+          {importResult.errors.length > 0 && (
+            <div className="alert alert--error">
+              Часть строк не распознана:
+              <ul className="upload-errors">
+                {importResult.errors.slice(0, 10).map((err) => (
                   <li key={err}>{err}</li>
                 ))}
+                {importResult.errors.length > 10 && (
+                  <li>… и ещё {importResult.errors.length - 10}</li>
+                )}
               </ul>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
+        </>
+      )}
 
       {error && <div className="alert alert--error">{error}</div>}
 
       {items === null ? (
         <div className="loading">Загрузка…</div>
       ) : items.length === 0 ? (
-        <div className="card">
-          <div className="table__empty" style={{ padding: 28 }}>
-            Расписание пусто — загрузите Excel-файл или добавьте занятия через API
-          </div>
+        <div className="card empty">
+          Расписание пусто
+          <small>Загрузите файл Excel — поддерживается институтская сетка и построчный шаблон</small>
         </div>
       ) : (
         WEEKDAYS.map((dayName, index) => {
           const dayItems = byWeekday.get(index + 1)
           if (!dayItems || dayItems.length === 0) return null
           return (
-            <section key={dayName} className="section card">
+            <section key={dayName} className="section">
               <h2>{dayName}</h2>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Время</th>
-                    <th>Группа</th>
-                    <th>Дисциплина</th>
-                    <th>Неделя</th>
-                    <th>Преподаватель</th>
-                    <th>Аудитория</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {dayItems.map((item) => (
-                    <tr key={item.id}>
-                      <td>
-                        {item.starts_at.slice(0, 5)}–{item.ends_at.slice(0, 5)}
-                      </td>
-                      <td>{item.group.name}</td>
-                      <td>
-                        {item.discipline.name}
-                        {item.lesson_type && (
-                          <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                            {' '}
-                            ({item.lesson_type})
-                          </span>
-                        )}
-                      </td>
-                      <td>
-                        <WeekBadge week={item.week_type} />
-                      </td>
-                      <td>{item.teacher?.full_name ?? '—'}</td>
-                      <td>{item.classroom?.number ?? '—'}</td>
+              <div className="table-wrap">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Время</th>
+                      <th>Группа</th>
+                      <th>Дисциплина</th>
+                      <th>Неделя</th>
+                      <th>Преподаватель</th>
+                      <th>Аудитория</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {dayItems.map((item) => (
+                      <tr key={item.id}>
+                        <td className="num">
+                          {fmtTime(item.starts_at)}–{fmtTime(item.ends_at)}
+                        </td>
+                        <td className="cell-main">{item.group.name}</td>
+                        <td>
+                          {item.discipline.name}
+                          {item.lesson_type && (
+                            <span style={{ color: 'var(--text-faint)', fontSize: 12.5 }}>
+                              {' '}
+                              ({item.lesson_type})
+                            </span>
+                          )}
+                        </td>
+                        <td>
+                          <WeekBadge week={item.week_type} />
+                        </td>
+                        <td>{item.teacher?.full_name ?? '—'}</td>
+                        <td>{item.classroom?.number ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
           )
         })

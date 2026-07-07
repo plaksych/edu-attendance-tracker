@@ -1,0 +1,115 @@
+name: Deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      pages_enabled: ${{ steps.pages.outputs.enabled }}
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build static frontend
+        run: npm run build -- --base=/edu-attendance-tracker/
+        env:
+          VITE_STATIC_DATA: "true"
+
+      - name: Check GitHub Pages
+        id: pages
+        working-directory: .
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PAGES_ADMIN_TOKEN: ${{ secrets.PAGES_ADMIN_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/pages"
+          headers=(
+            -H "Accept: application/vnd.github+json"
+            -H "X-GitHub-Api-Version: 2022-11-28"
+          )
+
+          status="$(
+            curl -sS -o /tmp/pages.json -w "%{http_code}" \
+              "${headers[@]}" \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              "${api}"
+          )"
+
+          if [ "${status}" = "200" ]; then
+            echo "enabled=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+
+          if [ -n "${PAGES_ADMIN_TOKEN}" ]; then
+            create_status="$(
+              curl -sS -o /tmp/pages-create.json -w "%{http_code}" \
+                -X POST \
+                "${headers[@]}" \
+                -H "Authorization: Bearer ${PAGES_ADMIN_TOKEN}" \
+                -d '{"build_type":"workflow"}' \
+                "${api}"
+            )"
+            if [ "${create_status}" = "201" ] || [ "${create_status}" = "204" ]; then
+              echo "enabled=true" >> "${GITHUB_OUTPUT}"
+              exit 0
+            fi
+            echo "::warning::Could not enable GitHub Pages automatically. HTTP ${create_status}."
+          fi
+
+          echo "::notice::GitHub Pages is not enabled. Enable Settings -> Pages -> Source: GitHub Actions, or add PAGES_ADMIN_TOKEN with Pages administration permissions."
+          echo "enabled=false" >> "${GITHUB_OUTPUT}"
+
+      - name: Configure Pages
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/configure-pages@v6
+
+      - name: Upload artifact
+        if: steps.pages.outputs.enabled == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: frontend/dist
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    if: needs.build.outputs.pages_enabled == 'true'
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

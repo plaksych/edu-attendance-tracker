@@ -16,6 +16,8 @@ eggs/
 .eggs/
 lib/
 lib64/
+!frontend/src/lib/
+!frontend/src/lib/**
 parts/
 sdist/
 var/
@@ -238,6 +240,16 @@ media/
 
 # Локальные БД для отладки
 *.db
+
+# Локальные выгрузки, схемы и тестовые медиа
+*.xls
+*.xlsx
+*.pdf
+*.mp4
+*.mov
+*.zip
+output/
+docs/
 
 # Локальные таблицы и выгрузки
 *.xlsx

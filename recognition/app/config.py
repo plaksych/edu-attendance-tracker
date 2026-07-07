@@ -1,28 +1,36 @@
+import socket
 from functools import lru_cache
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Куда отправлять результаты распознавания
-    backend_url: str = "http://localhost:8000"
+    database_url: str = "postgresql://attendance:attendance@localhost:5432/attendance"
 
-    # Интервал между замерами, сек. На CPU с yolov8n комфортно от 20 сек
-    snapshot_interval: int = 30
+    # Идентификатор воркера в очереди; в контейнере совпадает с hostname
+    worker_id: str = Field(default_factory=socket.gethostname)
+
+    poll_interval_seconds: int = 5
+    lease_minutes: int = 30
+    heartbeat_interval_seconds: int = 60
+    max_attempts: int = 3
+    retry_delay_seconds: int = 120
 
     # Веса модели: файл или имя из зоопарка ultralytics (скачается автоматически)
     model_path: str = "yolov8n.pt"
 
-    # Порог уверенности для класса person
-    confidence_threshold: float = 0.35
+    # Сколько дней доступен размеченный кадр
+    annotated_retention_days: int = 90
+    jpeg_quality: int = 85
 
-    # Каталог для кадров; общий volume с backend
-    snapshot_dir: str = "./media"
-
-    # Сколько секунд ждать переподключения к потоку после обрыва
-    reconnect_delay: int = 10
+    minio_endpoint: str = "localhost:9000"
+    minio_access_key: str = "minioadmin"
+    minio_secret_key: str = "minioadmin"
+    minio_bucket: str = "attendance-clips"
+    minio_secure: bool = False
 
 
 @lru_cache

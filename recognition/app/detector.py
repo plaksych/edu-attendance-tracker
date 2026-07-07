@@ -6,24 +6,23 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from app.config import settings
-
 logger = logging.getLogger(__name__)
 
 PERSON_CLASS_ID = 0
 
 
 @dataclass
-class DetectionResult:
+class Detection:
     person_count: int
-    avg_confidence: float | None
+    confidences: list[float]
     annotated_frame: np.ndarray
 
 
 class PersonDetector:
     """Потокобезопасный детектор: модель загружается один раз при первом обращении."""
 
-    def __init__(self) -> None:
+    def __init__(self, model_path: str) -> None:
+        self._model_path = model_path
         self._model = None
         self._lock = threading.Lock()
 
@@ -33,28 +32,23 @@ class PersonDetector:
                 if self._model is None:
                     from ultralytics import YOLO
 
-                    logger.info("Загрузка модели %s", settings.model_path)
-                    self._model = YOLO(settings.model_path)
+                    logger.info("Загрузка модели %s", self._model_path)
+                    self._model = YOLO(self._model_path)
         return self._model
 
-    def detect(self, frame: np.ndarray) -> DetectionResult:
+    def detect(self, frame: np.ndarray, conf: float) -> Detection:
         model = self._get_model()
         with self._lock:
             results = model.predict(
                 frame,
                 classes=[PERSON_CLASS_ID],
-                conf=settings.confidence_threshold,
+                conf=conf,
                 verbose=False,
             )
         result = results[0]
         confidences = result.boxes.conf.tolist() if result.boxes is not None else []
-        return DetectionResult(
+        return Detection(
             person_count=len(confidences),
-            avg_confidence=round(sum(confidences) / len(confidences), 4)
-            if confidences
-            else None,
+            confidences=[float(value) for value in confidences],
             annotated_frame=result.plot(),
         )
-
-
-detector = PersonDetector()

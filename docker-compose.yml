@@ -15,6 +15,23 @@ services:
     ports:
       - "5432:5432"
 
+  minio:
+    image: quay.io/minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
   backend:
     build: ./backend
     environment:
@@ -23,14 +40,19 @@ services:
       DB_NAME: ${DB_NAME:-attendance}
       DB_USER: ${DB_USER:-attendance}
       DB_PASSWORD: ${DB_PASSWORD:-attendance}
-      RECOGNITION_URL: http://recognition:8001
-      MEDIA_DIR: /data/snapshots
-      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+      MINIO_ENDPOINT: minio:9000
+      # Адрес MinIO для браузера: на нём подписываются presigned-ссылки
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-attendance-clips}
+      TIMEZONE: ${TIMEZONE:-Europe/Moscow}
       SEMESTER_START: ${SEMESTER_START:-2026-02-09}
-    volumes:
-      - snapshots:/data/snapshots
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
     depends_on:
       db:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     ports:
       - "8000:8000"
@@ -40,20 +62,31 @@ services:
       timeout: 5s
       retries: 5
 
-  recognition:
-    build: ./recognition
+  capture-manager:
+    build: ./capture
     environment:
-      BACKEND_URL: http://backend:8000
-      SNAPSHOT_INTERVAL: ${SNAPSHOT_INTERVAL:-30}
-      SNAPSHOT_DIR: /data/snapshots
-      CONFIDENCE_THRESHOLD: ${CONFIDENCE_THRESHOLD:-0.35}
-    volumes:
-      - snapshots:/data/snapshots
+      DATABASE_URL: postgresql://${DB_USER:-attendance}:${DB_PASSWORD:-attendance}@db:5432/${DB_NAME:-attendance}
+      CAPTURE_GROUP: ${CAPTURE_GROUP:-default}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-attendance-clips}
     depends_on:
       backend:
         condition: service_healthy
-    ports:
-      - "8001:8001"
+
+  recognition-worker:
+    build: ./recognition
+    environment:
+      DATABASE_URL: postgresql://${DB_USER:-attendance}:${DB_PASSWORD:-attendance}@db:5432/${DB_NAME:-attendance}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
+      MINIO_BUCKET: ${MINIO_BUCKET:-attendance-clips}
+    depends_on:
+      backend:
+        condition: service_healthy
+    # Масштабирование: docker compose up -d --scale recognition-worker=3
 
   frontend:
     build: ./frontend
@@ -64,4 +97,4 @@ services:
 
 volumes:
   pgdata:
-  snapshots:
+  miniodata:

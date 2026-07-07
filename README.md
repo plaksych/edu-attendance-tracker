@@ -1,139 +1,276 @@
-# Educational Attendance Tracker
+# Система контроля посещаемости учебных занятий
 
-Информационная система для контроля посещаемости учебных занятий. Проект объединяет веб-интерфейс, backend API, сервис распознавания людей на кадрах и PostgreSQL.
-
-Система рассчитана на учебное расписание с белой и зелёной неделей, импорт занятий из Excel, фиксацию замеров с камер и построение статистики по группам, преподавателям и дисциплинам.
+Проект автоматизирует контроль посещаемости по расписанию занятий и потокам с
+IP-камер. Система создаёт два замера на каждое занятие, записывает короткие
+видеофрагменты, распознаёт людей на кадрах, сохраняет исходное видео и
+размеченный кадр, а затем показывает итоговую посещаемость в веб-интерфейсе.
 
 ## Возможности
 
-- ведение справочников групп, преподавателей, дисциплин и аудиторий;
-- импорт расписания из Excel в двух форматах: институтская сетка и построчный шаблон;
-- поддержка занятий по белой, зелёной или каждой учебной неделе;
-- формирование занятий на выбранную дату по расписанию;
-- запуск и остановка обработки видеопотока для занятия;
-- подсчёт людей на кадрах через YOLOv8;
-- хранение снимков и сырых замеров распознавания;
-- расчёт средней, максимальной и процентной посещаемости;
-- дашборд со сводкой и динамикой по учебным группам.
+- импорт расписания из `.xlsx`;
+- справочники групп, преподавателей, дисциплин и аудиторий;
+- регистрация IP-камер и привязка одной или двух камер к аудитории;
+- автоматическое создание занятий на горизонт 14 дней;
+- два замера на занятие: после начала и перед окончанием;
+- параллельная запись видео с камер через FFmpeg;
+- хранение видео и размеченных кадров в MinIO;
+- очередь записи и очередь распознавания в PostgreSQL;
+- горизонтальное масштабирование capture- и recognition-воркеров;
+- локальное распознавание людей моделью YOLO;
+- агрегация результатов по кадрам, камерам и двум замерам;
+- дашборд посещаемости по группам, преподавателям и дисциплинам;
+- Swagger-документация backend API.
 
 ## Архитектура
 
-Проект состоит из четырёх контейнеров:
+```mermaid
+flowchart LR
+    User["Пользователь<br/>браузер"] -->|"HTTPS"| Frontend["Frontend<br/>React + TS + Nginx"]
+    Frontend -->|"REST"| Backend["Backend<br/>FastAPI :8000"]
 
-| Сервис | Назначение | Порт |
-|---|---|---:|
-| `frontend` | React-приложение с дашбордом, занятиями и расписанием | `3000` |
-| `backend` | FastAPI API, бизнес-логика, миграции, доступ к БД | `8000` |
-| `recognition` | FastAPI-сервис для обработки потока и разового распознавания | `8001` |
-| `db` | PostgreSQL 16 | `5432` |
+    subgraph BackendBox["Backend container"]
+        Backend
+        Scheduler["Measurement scheduler<br/>горизонт 14 дней"]
+        Services["Справочники, расписание,<br/>агрегация и статистика"]
+    end
 
-```text
-Frontend  ->  Backend API  ->  PostgreSQL
-                 |
-                 v
-          Recognition service
-                 |
-                 v
-          Shared snapshots volume
+    Backend --> Services
+    Scheduler --> DB[("PostgreSQL 16")]
+    Services --> DB
+
+    Cameras["IP-камеры<br/>1-2 на аудиторию"] -->|"RTSP"| Capture["Capture manager x N<br/>FFmpeg"]
+    Capture -->|"claim / complete<br/>camera_captures"| DB
+    Capture -->|"PUT original.mp4"| MinIO[("MinIO<br/>video и annotated")]
+
+    DB -->|"claim recognition_jobs"| Recognition["Recognition manager x N<br/>YOLO workers"]
+    MinIO -->|"GET original.mp4"| Recognition
+    Recognition -->|"PUT annotated.jpg"| MinIO
+    Recognition -->|"result + object key"| DB
+
+    Backend -->|"presigned URL"| MinIO
 ```
 
-Backend является единственной точкой доступа к базе данных. Recognition-сервис не хранит состояние занятий в БД: он получает `session_id` и адрес камеры от backend, обрабатывает поток и отправляет результаты обратно через REST.
+Основная идея: PostgreSQL хранит предметные данные и выполняет роль надёжной
+очереди, MinIO хранит тяжёлые медиа, а воркеры записи и распознавания можно
+масштабировать независимо.
 
-Кадры сохраняются в общий Docker volume `snapshots`. Backend отдаёт их как статические файлы по пути `/media`.
+## Компоненты
 
-## Стек
+| Компонент | Где находится | Назначение |
+| --- | --- | --- |
+| Frontend | `frontend/` | React-приложение: дашборд, расписание, занятия, камеры, справочники |
+| Backend | `backend/` | FastAPI, REST API, Swagger, импорт расписания, статистика, presigned URL |
+| Scheduler | `backend/app/services/scheduler.py` | Создаёт занятия, замеры и задания записи, возвращает зависшие jobs |
+| Capture manager | `capture/` | Забирает `camera_captures`, пишет `.mp4` через FFmpeg, загружает в MinIO |
+| Recognition worker | `recognition/` | Забирает `recognition_jobs`, обрабатывает видео YOLO, сохраняет результат |
+| PostgreSQL | `docker-compose.yml` | Справочники, расписание, sessions, measurements, queues, результаты |
+| MinIO | `docker-compose.yml` | Исходные ролики и размеченные кадры |
 
-| Часть | Технологии |
-|---|---|
-| Frontend | React 18, TypeScript, Vite, Recharts |
-| Backend | Python 3.11, FastAPI, SQLAlchemy, Alembic, Pydantic |
-| Recognition | Python 3.11, FastAPI, Ultralytics YOLOv8, OpenCV |
-| Database | PostgreSQL 16 |
-| Infrastructure | Docker, Docker Compose, Nginx |
+## Поток одного занятия
 
-## Структура проекта
+1. Backend создаёт `sessions` по расписанию.
+2. Scheduler создаёт два `measurements`:
+   - `after_start = starts_at + 15 минут`;
+   - `before_end = ends_at - 15 минут`.
+3. Для каждой активной камеры аудитории создаются `camera_captures`.
+4. Capture manager атомарно забирает задания через PostgreSQL, дожидается
+   `planned_at`, записывает 20 секунд видео и кладёт его в MinIO.
+5. После успешной записи создаётся `recognition_job`.
+6. Recognition worker забирает job, скачивает ролик из MinIO, сэмплирует кадры,
+   считает людей и сохраняет `recognition_result`.
+7. Backend объединяет результаты камер в итог замера.
+8. После закрытия двух замеров backend формирует `attendance_record`.
 
-```text
-edu-attendance-tracker/
-├── backend/
-│   ├── app/
-│   │   ├── api/v1/              # REST API
-│   │   ├── core/                # настройки и подключение к БД
-│   │   ├── models/              # SQLAlchemy-модели
-│   │   ├── schemas/             # Pydantic-схемы
-│   │   ├── services/            # импорт, статистика, занятия, recognition-клиент
-│   │   ├── import_timetable.py  # CLI-импорт расписания
-│   │   └── main.py
-│   ├── alembic/                 # миграции БД
-│   ├── Dockerfile
-│   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── api/                 # клиент API и типы
-│   │   ├── components/          # общие UI-компоненты
-│   │   └── pages/               # дашборд, занятия, расписание
-│   ├── Dockerfile
-│   ├── nginx.conf
-│   └── package.json
-├── recognition/
-│   ├── app/
-│   │   ├── detector.py          # обёртка над YOLOv8
-│   │   ├── worker.py            # обработка видеопотока
-│   │   ├── config.py
-│   │   └── main.py
-│   ├── Dockerfile
-│   └── requirements.txt
-├── docker-compose.yml
-├── .env.example
-└── README.md
+## Модель данных
+
+```mermaid
+erDiagram
+    GROUP ||--o{ SCHEDULE : has
+    TEACHER ||--o{ SCHEDULE : teaches
+    DISCIPLINE ||--o{ SCHEDULE : defines
+    CLASSROOM ||--o{ SCHEDULE : hosts
+    CLASSROOM ||--o{ CLASSROOM_CAMERA : contains
+    CAMERA ||--o{ CLASSROOM_CAMERA : assigned
+
+    SCHEDULE ||--o{ SESSION : creates
+    SESSION ||--|{ MEASUREMENT : contains
+    MEASUREMENT ||--|{ CAMERA_CAPTURE : records
+    CAMERA ||--o{ CAMERA_CAPTURE : source
+    CAMERA_CAPTURE ||--o| RECOGNITION_JOB : creates
+    RECOGNITION_JOB ||--o| RECOGNITION_RESULT : produces
+    SESSION ||--o| ATTENDANCE_RECORD : summarizes
 ```
 
-## Быстрый старт
+Ключевые сущности:
+
+- `groups`, `teachers`, `disciplines`, `classrooms` - справочники;
+- `cameras` - физические камеры с `rtsp_url` и `capture_group`;
+- `classroom_cameras` - привязка камеры к аудитории, роль и приоритет;
+- `schedule` - недельная сетка занятий;
+- `sessions` - конкретные занятия на дату;
+- `measurements` - два временных среза занятия;
+- `camera_captures` - очередь и результат записи видео;
+- `recognition_jobs` - очередь распознавания;
+- `recognition_results` - агрегаты по кадрам и ключ размеченного изображения;
+- `attendance_records` - итог посещаемости занятия.
+
+## Камеры и агрегация
+
+В аудитории штатно используется одна или две камеры. Режим задаётся в поле
+`classrooms.aggregation_mode`.
+
+| Режим | Когда использовать | Как считается итог замера |
+| --- | --- | --- |
+| `single` | одна камера | берётся камера с наивысшим приоритетом |
+| `maximum` | зоны камер пересекаются | берётся максимум по камерам |
+| `sum` | зоны камер не пересекаются | результаты суммируются |
+| `primary_backup` | основная и резервная камера | основная камера, при низкой уверенности резервная |
+
+Складывать пересекающиеся камеры нельзя: один человек может попасть в оба кадра.
+
+## Очереди и отказоустойчивость
+
+PostgreSQL используется как надёжная очередь:
+
+- jobs забираются через `FOR UPDATE SKIP LOCKED`;
+- `worker_id` показывает владельца задания;
+- `lease_until` ограничивает время владения заданием;
+- `attempts` ограничивает число повторов;
+- `retry_wait` даёт паузу перед повтором;
+- `heartbeat_at` продлевает долгую обработку recognition job.
+
+Если worker упал, backend scheduler возвращает задание в очередь после истечения
+lease. Если capture worker получил сигнал остановки до начала записи, он сразу
+возвращает ещё не начатые задания в `pending`.
+
+## Хранение медиа
+
+Object keys в MinIO стабильны, поэтому повторная попытка перезаписывает тот же
+объект:
+
+```text
+original/sessions/{session_id}/measurements/{measurement_id}/cameras/{camera_id}.mp4
+annotated/sessions/{session_id}/measurements/{measurement_id}/cameras/{camera_id}.jpg
+```
+
+Backend не отдаёт бакет напрямую. Frontend получает временные presigned URL:
+
+- исходное видео хранится 30 дней;
+- размеченный кадр хранится 90 дней;
+- числовые результаты остаются в PostgreSQL.
+
+## API
+
+После запуска backend документация доступна по адресу:
+
+```text
+http://localhost:8000/docs
+```
+
+Основные группы endpoints:
+
+- `GET /health` - проверка backend;
+- `/api/v1/groups`, `/teachers`, `/disciplines`, `/classrooms` - справочники;
+- `/api/v1/cameras` - камеры;
+- `/api/v1/classrooms/{id}/cameras` - привязка камер к аудитории;
+- `/api/v1/schedule` и `/schedule/import` - расписание;
+- `/api/v1/sessions` - занятия и замеры;
+- `/api/v1/captures/{id}/media` - временные ссылки на видео и кадр;
+- `/api/v1/stats/*` - дашборд и аналитика.
+
+## Быстрый запуск
 
 Требования:
 
 - Docker и Docker Compose;
-- свободные порты `3000`, `5432`, `8000`, `8001`;
-- при локальном запуске без контейнеров: Python 3.11+ и Node.js 18+.
+- свободные порты `3000`, `8000`, `9000`, `9001`, `5432`.
 
 ```bash
-git clone <repo_url>
-cd edu-attendance-tracker
-
 cp .env.example .env
 docker compose up -d --build
 docker compose exec backend alembic upgrade head
 ```
 
-После запуска доступны:
+Адреса сервисов:
 
-- frontend: `http://localhost:3000`;
-- backend API: `http://localhost:8000`;
-- backend Swagger UI: `http://localhost:8000/docs`;
-- recognition Swagger UI: `http://localhost:8001/docs`.
+| Сервис | Адрес |
+| --- | --- |
+| Frontend | `http://localhost:3000` |
+| Backend Swagger | `http://localhost:8000/docs` |
+| Backend health | `http://localhost:8000/health` |
+| MinIO console | `http://localhost:9001` |
 
-## Импорт расписания
-
-Расписание можно загрузить на странице `Расписание` во frontend или через API:
+Загрузка расписания через API:
 
 ```bash
-curl -F "file=@schedule.xlsx" http://localhost:8000/api/v1/schedule/import
+curl -F "file=@timetable.xlsx" http://localhost:8000/api/v1/schedule/import
 ```
 
-Поддерживаются два формата:
+Масштабирование воркеров:
 
-| Формат | Описание |
-|---|---|
-| Институтская сетка | Листы с группами по колонкам, слот пары из двух строк: верхняя строка для белой недели, нижняя для зелёной |
-| Построчный шаблон | Колонки `Группа`, `Преподаватель`, `Дисциплина`, `Аудитория`, `День недели`, `Начало`, `Конец`, `Неделя` |
+```bash
+docker compose up -d --scale recognition-worker=3
+docker compose up -d --scale capture-manager=2
+```
 
-Шаблон построчного формата можно скачать из интерфейса или по адресу:
+## GitHub Pages
+
+Frontend доступен как статическая витрина:
 
 ```text
-GET http://localhost:8000/api/v1/schedule/template
+https://plaksych.github.io/edu-attendance-tracker/
 ```
 
-## Локальная разработка
+В этом режиме backend не нужен: приложение читает `demo-data.json`, который
+сгенерирован из локального файла `ikn-bak.xlsx`. Сам `.xlsx` в репозиторий не
+добавляется.
+
+Текущая публикация GitHub Pages настроена на ветку `develop` и директорию `/`,
+поэтому собранные файлы лежат в корне репозитория:
+
+- `index.html`;
+- `assets/`;
+- `demo-data.json`;
+- `favicon.svg`;
+- `.nojekyll`.
+
+Обновление данных и статической публикации:
+
+```bash
+PYTHONPATH=backend .venv/bin/python scripts/generate_demo_data.py ikn-bak.xlsx frontend/public/demo-data.json
+cd frontend
+VITE_STATIC_DATA=true npm run build -- --base=/edu-attendance-tracker/
+cd ..
+rm -rf assets
+cp -R frontend/dist/assets assets
+cp frontend/dist/index.html frontend/dist/favicon.svg frontend/dist/demo-data.json .
+```
+
+Workflow `.github/workflows/pages.yml` дополнительно собирает frontend при push
+в `develop`. Если владелец репозитория переключит Pages source на
+`GitHub Actions`, этот же workflow сможет публиковать `frontend/dist` как
+artifact-based deploy. Для текущего режима `develop /` достаточно корневых
+статических файлов.
+
+## Настройки
+
+Основные переменные находятся в `.env.example`.
+
+| Переменная | Значение |
+| --- | --- |
+| `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD` | подключение backend к PostgreSQL |
+| `DATABASE_URL` | строка подключения для capture и recognition |
+| `MINIO_ENDPOINT` | внутренний адрес MinIO для сервисов |
+| `MINIO_PUBLIC_ENDPOINT` | адрес MinIO, доступный браузеру для presigned URL |
+| `MINIO_BUCKET` | бакет для видео и кадров |
+| `TIMEZONE` | часовой пояс расписания |
+| `SEMESTER_START` | понедельник первой учебной недели |
+| `CAPTURE_GROUP` | группа камер, которую обслуживает capture manager |
+
+Параметры scheduler и очередей задаются в `backend/app/core/config.py`,
+`capture/app/config.py` и `recognition/app/config.py`.
+
+## Разработка
 
 Backend:
 
@@ -154,112 +291,70 @@ npm install
 npm run dev
 ```
 
-Recognition:
+Capture manager:
+
+```bash
+cd capture
+pip install -r requirements.txt
+python -m app.main
+```
+
+Recognition worker:
 
 ```bash
 cd recognition
-python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
-uvicorn app.main:app --port 8001
+python -m app.main
 ```
 
-## Переменные окружения
+## Проверки перед push
 
-| Переменная | Сервис | Описание |
-|---|---|---|
-| `DB_HOST` | backend | Хост PostgreSQL |
-| `DB_PORT` | backend | Порт PostgreSQL |
-| `DB_NAME` | backend | Имя базы данных |
-| `DB_USER` | backend | Пользователь БД |
-| `DB_PASSWORD` | backend | Пароль БД |
-| `DATABASE_URL` | backend | Полная строка подключения к PostgreSQL |
-| `RECOGNITION_URL` | backend | Адрес recognition-сервиса |
-| `SEMESTER_START` | backend | Понедельник первой учебной недели семестра |
-| `CORS_ORIGINS` | backend | Разрешённые origins для CORS через запятую |
-| `BACKEND_URL` | recognition | Адрес backend для отправки результатов |
-| `SNAPSHOT_INTERVAL` | recognition | Интервал между замерами, сек |
-| `CONFIDENCE_THRESHOLD` | recognition | Порог уверенности детектора |
-| `MODEL_PATH` | recognition | Путь к весам модели |
-| `SNAPSHOT_DIR` | recognition | Каталог для сохранения кадров |
+```bash
+python3 -m compileall backend/app capture/app recognition/app
+docker compose config -q
+cd frontend && npm run build
+```
 
-## Основные эндпоинты
+Для полной проверки с базой:
 
-Backend:
+```bash
+docker compose up -d --build
+docker compose exec backend alembic upgrade head
+curl http://localhost:8000/health
+```
+
+## Структура репозитория
 
 ```text
-GET    /health
+backend/
+  app/api/v1/          REST endpoints
+  app/models/          SQLAlchemy-модели
+  app/schemas/         Pydantic-схемы и Swagger-описания
+  app/services/        scheduler, импорт, агрегация, статистика, media links
+  alembic/             миграции БД
 
-GET    /api/v1/groups
-POST   /api/v1/groups
-GET    /api/v1/teachers
-POST   /api/v1/teachers
-GET    /api/v1/disciplines
-POST   /api/v1/disciplines
-GET    /api/v1/classrooms
-POST   /api/v1/classrooms
+capture/
+  app/db.py            claim/complete camera_captures
+  app/recorder.py      запись ролика через FFmpeg
+  app/storage.py       загрузка original.mp4 в MinIO
 
-GET    /api/v1/schedule
-POST   /api/v1/schedule
-DELETE /api/v1/schedule/{item_id}
-GET    /api/v1/schedule/template
-POST   /api/v1/schedule/import
-GET    /api/v1/schedule/week-type
+recognition/
+  app/db.py            claim/heartbeat/complete recognition_jobs
+  app/processor.py     обработка видео и расчёт агрегатов
+  app/detector.py      обёртка над YOLO
+  app/storage.py       MinIO download/upload
 
-GET    /api/v1/sessions/today
-GET    /api/v1/sessions
-GET    /api/v1/sessions/{session_id}
-POST   /api/v1/sessions/{session_id}/start
-POST   /api/v1/sessions/{session_id}/finish
-POST   /api/v1/sessions/{session_id}/snapshots
-GET    /api/v1/sessions/{session_id}/attendance
-
-GET    /api/v1/stats/summary
-GET    /api/v1/stats/teachers/{teacher_id}
-GET    /api/v1/stats/disciplines/{discipline_id}
-GET    /api/v1/stats/groups/{group_id}
-GET    /api/v1/stats/groups/{group_id}/timeline
+frontend/
+  src/pages/           страницы приложения
+  src/api/             клиент backend API
+  src/components/      общие компоненты интерфейса
 ```
-
-Recognition:
-
-```text
-GET  /health
-GET  /streams
-POST /streams/start
-POST /streams/stop
-POST /detect
-```
-
-## Модель данных
-
-| Сущность | Назначение |
-|---|---|
-| `Group` | Учебная группа, курс, факультет и численность |
-| `Teacher` | Преподаватель |
-| `Discipline` | Дисциплина |
-| `Classroom` | Аудитория, вместимость и адрес камеры |
-| `Schedule` | Плановое занятие: группа, время, аудитория, неделя и тип занятия |
-| `Session` | Конкретное занятие на дату |
-| `DetectionSnapshot` | Сырой замер количества людей на кадре |
-| `AttendanceRecord` | Агрегированная посещаемость по завершённому занятию |
-
-## Статус
-
-- backend API, модели и миграции реализованы;
-- импорт расписания из Excel реализован;
-- расчёт белой и зелёной недели реализован;
-- recognition-сервис умеет работать с потоком и разовыми изображениями;
-- frontend содержит дашборд, расписание и список занятий;
-- контейнерная сборка описана через Docker Compose.
 
 ## Команда
 
-| Участник | Зона ответственности |
-|---|---|
-| Балалыкин М. Г. | teamlead, backend |
-| Матвейчев И. В. | recognition, backend |
-| Плешкова Д. С. | database, backend |
-| Попова Ю. А. | frontend |
+- Балалыкин М.Г. - teamlead, backend
+- Матвейчев И.В. - recognition, backend
+- Плешкова Д.С. - database, backend
+- Попова Ю.А. - frontend
 
 Проект выполнен в рамках производственной практики.

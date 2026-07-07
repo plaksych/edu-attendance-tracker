@@ -1,11 +1,13 @@
 from datetime import date
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session as DbSession
 
 from app.models import (
+    AttendanceCalculationStatus,
     AttendanceRecord,
+    Camera,
     Classroom,
     Discipline,
     Group,
@@ -27,13 +29,28 @@ def _round(value, digits: int = 4):
     return round(float(value), digits) if value is not None else None
 
 
+_COMPLETE = func.count(
+    case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.complete, 1))
+)
+_PARTIAL = func.count(
+    case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.partial, 1))
+)
+_FAILED = func.count(
+    case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.failed, 1))
+)
+
+
 def summary(db: DbSession) -> SummaryStats:
     today = date.today()
+    complete, partial, failed = db.execute(
+        select(_COMPLETE, _PARTIAL, _FAILED)
+    ).one()
     return SummaryStats(
         groups=db.scalar(select(func.count(Group.id))) or 0,
         teachers=db.scalar(select(func.count(Teacher.id))) or 0,
         disciplines=db.scalar(select(func.count(Discipline.id))) or 0,
         classrooms=db.scalar(select(func.count(Classroom.id))) or 0,
+        cameras=db.scalar(select(func.count(Camera.id))) or 0,
         sessions_total=db.scalar(select(func.count(Session.id))) or 0,
         sessions_today=db.scalar(
             select(func.count(Session.id)).where(Session.date == today)
@@ -46,6 +63,9 @@ def summary(db: DbSession) -> SummaryStats:
         avg_attendance_rate=_round(
             db.scalar(select(func.avg(AttendanceRecord.attendance_rate)))
         ),
+        records_complete=complete or 0,
+        records_partial=partial or 0,
+        records_failed=failed or 0,
     )
 
 
@@ -66,13 +86,16 @@ def _entity_stats(
         select(
             func.count(AttendanceRecord.id),
             func.avg(AttendanceRecord.attendance_rate),
-            func.avg(AttendanceRecord.detected_avg),
+            func.avg(AttendanceRecord.detected_average),
+            _COMPLETE,
+            _PARTIAL,
+            _FAILED,
         )
         .join(Session, AttendanceRecord.session_id == Session.id)
         .join(Schedule, Session.schedule_id == Schedule.id)
         .where(filter_column == entity_id)
     )
-    total_sessions, avg_rate, avg_detected = db.execute(base).one()
+    total, avg_rate, avg_detected, complete, partial, failed = db.execute(base).one()
 
     breakdown_name = getattr(breakdown_entity, name_attr)
     breakdown_rows = db.execute(
@@ -81,7 +104,7 @@ def _entity_stats(
             breakdown_name,
             func.count(AttendanceRecord.id),
             func.avg(AttendanceRecord.attendance_rate),
-            func.avg(AttendanceRecord.detected_avg),
+            func.avg(AttendanceRecord.detected_average),
         )
         .join(Schedule, breakdown_join_column == breakdown_entity.id)
         .join(Session, Session.schedule_id == Schedule.id)
@@ -94,9 +117,12 @@ def _entity_stats(
     return EntityStats(
         id=instance.id,
         name=getattr(instance, "name", None) or getattr(instance, "full_name", ""),
-        sessions_finished=total_sessions or 0,
+        sessions_finished=total or 0,
         avg_rate=_round(avg_rate),
         avg_detected=_round(avg_detected, 2),
+        records_complete=complete or 0,
+        records_partial=partial or 0,
+        records_failed=failed or 0,
         breakdown=[
             BreakdownItem(
                 id=row[0],
@@ -112,13 +138,7 @@ def _entity_stats(
 
 def teacher_stats(db: DbSession, teacher_id: int) -> EntityStats:
     return _entity_stats(
-        db,
-        Teacher,
-        teacher_id,
-        Schedule.teacher_id,
-        Group,
-        Schedule.group_id,
-        "name",
+        db, Teacher, teacher_id, Schedule.teacher_id, Group, Schedule.group_id, "name"
     )
 
 
@@ -136,13 +156,7 @@ def discipline_stats(db: DbSession, discipline_id: int) -> EntityStats:
 
 def group_stats(db: DbSession, group_id: int) -> EntityStats:
     return _entity_stats(
-        db,
-        Group,
-        group_id,
-        Schedule.group_id,
-        Discipline,
-        Schedule.discipline_id,
-        "name",
+        db, Group, group_id, Schedule.group_id, Discipline, Schedule.discipline_id, "name"
     )
 
 
@@ -157,7 +171,7 @@ def group_timeline(
         select(
             Session.date,
             func.avg(AttendanceRecord.attendance_rate),
-            func.avg(AttendanceRecord.detected_avg),
+            func.avg(AttendanceRecord.detected_average),
         )
         .join(AttendanceRecord, AttendanceRecord.session_id == Session.id)
         .join(Schedule, Session.schedule_id == Schedule.id)
@@ -174,7 +188,7 @@ def group_timeline(
         TimelinePoint(
             date=row[0],
             avg_rate=_round(row[1]),
-            detected_avg=_round(row[2], 2),
+            avg_detected=_round(row[2], 2),
             expected=group.students_count,
         )
         for row in db.execute(query).all()
