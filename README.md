@@ -215,25 +215,42 @@ docker compose up -d --scale capture-manager=2
 
 ## GitHub Pages
 
-Frontend можно собрать как статическую витрину для GitHub Pages. В этом режиме
-backend не нужен: приложение читает `frontend/public/demo-data.json`, который
+Frontend доступен как статическая витрина:
+
+```text
+https://plaksych.github.io/edu-attendance-tracker/
+```
+
+В этом режиме backend не нужен: приложение читает `demo-data.json`, который
 сгенерирован из локального файла `ikn-bak.xlsx`. Сам `.xlsx` в репозиторий не
 добавляется.
 
-Локальная проверка статического режима:
+Текущая публикация GitHub Pages настроена на ветку `develop` и директорию `/`,
+поэтому собранные файлы лежат в корне репозитория:
+
+- `index.html`;
+- `assets/`;
+- `demo-data.json`;
+- `favicon.svg`;
+- `.nojekyll`.
+
+Обновление данных и статической публикации:
 
 ```bash
 PYTHONPATH=backend .venv/bin/python scripts/generate_demo_data.py ikn-bak.xlsx frontend/public/demo-data.json
 cd frontend
-VITE_STATIC_DATA=true npm run build -- --base=/
+VITE_STATIC_DATA=true npm run build -- --base=/edu-attendance-tracker/
+cd ..
+rm -rf assets
+cp -R frontend/dist/assets assets
+cp frontend/dist/index.html frontend/dist/favicon.svg frontend/dist/demo-data.json .
 ```
 
-Workflow `.github/workflows/pages.yml` собирает frontend при push в `develop` и
-публикует `frontend/dist` через GitHub Pages. В репозитории нужно один раз
-включить Pages source `GitHub Actions` в настройках GitHub. Пока Pages не
-включён, workflow соберёт frontend и пропустит deploy без ошибки. Если хочется,
-чтобы workflow сам включал Pages, добавьте repository secret `PAGES_ADMIN_TOKEN`
-с правами управления Pages/administration для этого репозитория.
+Workflow `.github/workflows/pages.yml` дополнительно собирает frontend при push
+в `develop`. Если владелец репозитория переключит Pages source на
+`GitHub Actions`, этот же workflow сможет публиковать `frontend/dist` как
+artifact-based deploy. Для текущего режима `develop /` достаточно корневых
+статических файлов.
 
 ## Настройки
 
