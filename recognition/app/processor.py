@@ -8,13 +8,14 @@ import statistics
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 import cv2
 
 from app.config import settings
 from app.db import ClaimedJob, SourceContext
 from app.detector import Detection, PersonDetector
-from app.storage import ObjectStorage, annotated_object_key, upload_annotated_object_key
+from app.media_keys import annotated_camera_object_key, annotated_upload_object_key
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,12 @@ DEFAULT_FPS = 25.0
 
 class ProcessingError(Exception):
     """Ошибка обработки, текст которой пригоден для поля error задания."""
+
+
+class MediaStorage(Protocol):
+    def download(self, bucket: str | None, object_key: str, file_path: str) -> None: ...
+
+    def upload(self, object_key: str, file_path: str, content_type: str) -> None: ...
 
 
 @dataclass
@@ -41,7 +48,7 @@ class ProcessingResult:
 class JobProcessor:
     """Скачивает видео или изображение, запускает детектор и сохраняет кадр."""
 
-    def __init__(self, storage: ObjectStorage, detector: PersonDetector) -> None:
+    def __init__(self, storage: MediaStorage, detector: PersonDetector) -> None:
         self._storage = storage
         self._detector = detector
 
@@ -161,10 +168,10 @@ class JobProcessor:
         if context.source_kind == "upload":
             if context.upload_id is None:
                 raise ProcessingError("для загруженного файла не указан идентификатор")
-            return upload_annotated_object_key(context.upload_id)
+            return annotated_upload_object_key(context.upload_id)
         if None in (context.session_id, context.measurement_id, context.camera_id):
             raise ProcessingError("для записи камеры не хватает контекста")
-        return annotated_object_key(
+        return annotated_camera_object_key(
             context.session_id, context.measurement_id, context.camera_id
         )
 
