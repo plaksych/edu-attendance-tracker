@@ -74,7 +74,7 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    schedule_id: Mapped[int] = mapped_column(ForeignKey("schedule.id", ondelete="CASCADE"))
+    schedule_id: Mapped[int] = mapped_column(ForeignKey("schedule.id", ondelete="RESTRICT"))
     date: Mapped[date] = mapped_column(Date, index=True)
     status: Mapped[SessionStatus] = mapped_column(
         Enum(SessionStatus, name="session_status"), default=SessionStatus.scheduled

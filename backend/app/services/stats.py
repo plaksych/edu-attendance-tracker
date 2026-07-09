@@ -1,5 +1,3 @@
-from datetime import date
-
 from fastapi import HTTPException, status
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session as DbSession
@@ -23,6 +21,7 @@ from app.schemas.stats import (
     SummaryStats,
     TimelinePoint,
 )
+from app.services.weeks import current_local_date
 
 
 def _round(value, digits: int = 4):
@@ -41,7 +40,7 @@ _FAILED = func.count(
 
 
 def summary(db: DbSession) -> SummaryStats:
-    today = date.today()
+    today = current_local_date()
     complete, partial, failed = db.execute(
         select(_COMPLETE, _PARTIAL, _FAILED)
     ).one()

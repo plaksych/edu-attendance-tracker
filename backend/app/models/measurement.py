@@ -74,7 +74,7 @@ class CameraCapture(Base):
         ForeignKey("measurements.id", ondelete="CASCADE"), index=True
     )
     camera_id: Mapped[int] = mapped_column(
-        ForeignKey("cameras.id", ondelete="CASCADE"), index=True
+        ForeignKey("cameras.id", ondelete="RESTRICT"), index=True
     )
     status: Mapped[CaptureStatus] = mapped_column(
         Enum(CaptureStatus, name="capture_status"), default=CaptureStatus.pending

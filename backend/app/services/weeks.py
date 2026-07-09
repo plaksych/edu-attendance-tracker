@@ -1,7 +1,13 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from app.core.config import settings
 from app.models import WeekType
+
+
+def current_local_date() -> date:
+    """Текущая календарная дата в часовом поясе учебного расписания."""
+    return datetime.now(ZoneInfo(settings.timezone)).date()
 
 
 def week_type_for_date(target: date) -> WeekType:
