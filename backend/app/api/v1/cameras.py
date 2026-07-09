@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession, selectinload
 
 from app.core.database import get_db
-from app.models import Camera, CameraRole, Classroom, ClassroomCamera
+from app.models import Camera, CameraCapture, CameraRole, Classroom, ClassroomCamera
 from app.models.enums import CameraAggregationMode
 from app.schemas.cameras import (
     CameraCreate,
@@ -107,14 +107,36 @@ def update_camera(camera_id: int, payload: CameraUpdate, db: DbSession = Depends
     "/cameras/{camera_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удалить камеру",
-    description="Удаляет камеру вместе с привязкой к аудитории. История записей сохраняется.",
+    description=(
+        "Удаляет камеру без истории записей. Камеру с завершёнными или текущими "
+        "заданиями следует отключить, чтобы сохранить историю."
+    ),
+    responses={
+        404: {"description": "Камера не найдена"},
+        409: {"description": "У камеры есть задания записи в истории"},
+    },
 )
 def delete_camera(camera_id: int, db: DbSession = Depends(get_db)):
     camera = db.get(Camera, camera_id)
     if camera is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Камера не найдена")
+    has_captures = db.scalar(
+        select(CameraCapture.id).where(CameraCapture.camera_id == camera_id).limit(1)
+    )
+    if has_captures is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Нельзя удалить камеру с историей записей; отключите её вместо удаления",
+        )
     db.delete(camera)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Нельзя удалить камеру с историей записей; отключите её вместо удаления",
+        ) from None
 
 
 @router.put(

@@ -1,10 +1,13 @@
 import type { ReactNode } from 'react'
+import { useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import {
   IconCamera,
   IconCatalog,
+  IconClose,
   IconDashboard,
   IconLogo,
+  IconMenu,
   IconSchedule,
   IconSessions,
 } from './icons'
@@ -26,7 +29,7 @@ const setup: NavItem[] = [
   { to: '/catalog', label: 'Справочники', icon: <IconCatalog /> },
 ]
 
-function Links({ items }: { items: NavItem[] }) {
+function Links({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => void }) {
   return (
     <>
       {items.map(({ to, label, icon }) => (
@@ -37,6 +40,7 @@ function Links({ items }: { items: NavItem[] }) {
           className={({ isActive }) =>
             isActive ? 'sidebar__link sidebar__link--active' : 'sidebar__link'
           }
+          onClick={onNavigate}
         >
           {icon}
           <span>{label}</span>
@@ -47,9 +51,37 @@ function Links({ items }: { items: NavItem[] }) {
 }
 
 export function Layout() {
+  const [menuOpen, setMenuOpen] = useState(false)
+
+  const closeMenu = () => setMenuOpen(false)
+
   return (
     <div className="layout">
-      <nav className="sidebar">
+      <header className="mobile-header">
+        <NavLink to="/" className="mobile-header__brand" onClick={closeMenu}>
+          <span className="mobile-header__mark"><IconLogo /></span>
+          <span>Посещаемость</span>
+        </NavLink>
+        <button
+          type="button"
+          className="icon-button mobile-header__menu"
+          aria-label={menuOpen ? 'Закрыть навигацию' : 'Открыть навигацию'}
+          aria-expanded={menuOpen}
+          aria-controls="main-navigation"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          {menuOpen ? <IconClose /> : <IconMenu />}
+        </button>
+      </header>
+      {menuOpen && (
+        <button
+          type="button"
+          className="sidebar-backdrop"
+          aria-label="Закрыть навигацию"
+          onClick={closeMenu}
+        />
+      )}
+      <nav id="main-navigation" className={`sidebar${menuOpen ? ' sidebar--open' : ''}`} aria-label="Основная навигация">
         <div className="sidebar__brand">
           <div className="sidebar__logo">
             <IconLogo />
@@ -59,10 +91,13 @@ export function Layout() {
             <small>контроль занятий</small>
           </div>
         </div>
+        <button type="button" className="icon-button sidebar__dismiss" aria-label="Закрыть навигацию" onClick={closeMenu}>
+          <IconClose />
+        </button>
         <div className="sidebar__section">Мониторинг</div>
-        <Links items={monitoring} />
+        <Links items={monitoring} onNavigate={closeMenu} />
         <div className="sidebar__section">Настройка</div>
-        <Links items={setup} />
+        <Links items={setup} onNavigate={closeMenu} />
       </nav>
       <main className="content">
         <Outlet />

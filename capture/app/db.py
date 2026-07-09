@@ -138,10 +138,10 @@ class Database:
 
         return self._run(action)
 
-    def mark_recording(self, capture_id: int, worker_id: str, lease_seconds: int) -> None:
-        """Переводит задание в статус recording и продлевает lease."""
+    def mark_recording(self, capture_id: int, worker_id: str, lease_seconds: int) -> bool:
+        """Переводит своё claimed-задание в recording и продлевает lease."""
 
-        def action(cur: psycopg2.extensions.cursor) -> None:
+        def action(cur: psycopg2.extensions.cursor) -> bool:
             cur.execute(
                 """
                 UPDATE camera_captures
@@ -149,27 +149,48 @@ class Database:
                     capture_started_at = now(),
                     lease_until = now() + make_interval(secs => %s),
                     updated_at = now()
-                WHERE id = %s AND worker_id = %s
+                WHERE id = %s AND worker_id = %s AND status = 'claimed'
                 """,
                 (lease_seconds, capture_id, worker_id),
             )
+            return cur.rowcount == 1
 
-        self._run(action)
+        return self._run(action)
 
-    def mark_uploading(self, capture_id: int, worker_id: str) -> None:
-        """Переводит задание в статус uploading."""
+    def heartbeat(self, capture_id: int, worker_id: str, lease_seconds: int) -> bool:
+        """Продлевает lease активной записи; False означает потерю задания."""
 
-        def action(cur: psycopg2.extensions.cursor) -> None:
+        def action(cur: psycopg2.extensions.cursor) -> bool:
+            cur.execute(
+                """
+                UPDATE camera_captures
+                SET lease_until = now() + make_interval(secs => %s),
+                    updated_at = now()
+                WHERE id = %s
+                  AND worker_id = %s
+                  AND status IN ('recording', 'uploading')
+                """,
+                (lease_seconds, capture_id, worker_id),
+            )
+            return cur.rowcount == 1
+
+        return self._run(action)
+
+    def mark_uploading(self, capture_id: int, worker_id: str) -> bool:
+        """Переводит своё recording-задание в статус uploading."""
+
+        def action(cur: psycopg2.extensions.cursor) -> bool:
             cur.execute(
                 """
                 UPDATE camera_captures
                 SET status = 'uploading', updated_at = now()
-                WHERE id = %s AND worker_id = %s
+                WHERE id = %s AND worker_id = %s AND status = 'recording'
                 """,
                 (capture_id, worker_id),
             )
+            return cur.rowcount == 1
 
-        self._run(action)
+        return self._run(action)
 
     def mark_completed(
         self,
@@ -179,10 +200,10 @@ class Database:
         object_key: str,
         size_bytes: int,
         duration_ms: int,
-    ) -> None:
-        """Фиксирует успех и создаёт задание распознавания одной транзакцией."""
+    ) -> bool:
+        """Фиксирует успех своего uploading-задания и создаёт задачу распознавания."""
 
-        def action(cur: psycopg2.extensions.cursor) -> None:
+        def action(cur: psycopg2.extensions.cursor) -> bool:
             cur.execute(
                 """
                 UPDATE camera_captures
@@ -193,12 +214,16 @@ class Database:
                     size_bytes = %s,
                     duration_ms = %s,
                     capture_finished_at = now(),
+                    worker_id = NULL,
+                    lease_until = NULL,
                     error = NULL,
                     updated_at = now()
-                WHERE id = %s AND worker_id = %s
+                WHERE id = %s AND worker_id = %s AND status = 'uploading'
                 """,
                 (bucket, object_key, size_bytes, duration_ms, capture_id, worker_id),
             )
+            if cur.rowcount != 1:
+                return False
             cur.execute(
                 """
                 INSERT INTO recognition_jobs (camera_capture_id)
@@ -207,8 +232,9 @@ class Database:
                 """,
                 (capture_id,),
             )
+            return True
 
-        self._run(action)
+        return self._run(action)
 
     def release_claims(self, capture_ids: list[int], worker_id: str) -> int:
         """Возвращает ещё не начатые claimed-задания в очередь при остановке."""
@@ -239,10 +265,10 @@ class Database:
         worker_id: str,
         error: str,
         retry_delay_seconds: int,
-    ) -> None:
+    ) -> bool:
         """Откладывает задание на повтор; в pending его вернёт реапер backend."""
 
-        def action(cur: psycopg2.extensions.cursor) -> None:
+        def action(cur: psycopg2.extensions.cursor) -> bool:
             cur.execute(
                 """
                 UPDATE camera_captures
@@ -250,24 +276,33 @@ class Database:
                     lease_until = now() + make_interval(secs => %s),
                     error = %s,
                     updated_at = now()
-                WHERE id = %s AND worker_id = %s
+                WHERE id = %s
+                  AND worker_id = %s
+                  AND status IN ('claimed', 'recording', 'uploading')
                 """,
                 (retry_delay_seconds, error, capture_id, worker_id),
             )
+            return cur.rowcount == 1
 
-        self._run(action)
+        return self._run(action)
 
-    def mark_failed(self, capture_id: int, worker_id: str, error: str) -> None:
+    def mark_failed(self, capture_id: int, worker_id: str, error: str) -> bool:
         """Помечает задание проваленным после исчерпания попыток."""
 
-        def action(cur: psycopg2.extensions.cursor) -> None:
+        def action(cur: psycopg2.extensions.cursor) -> bool:
             cur.execute(
                 """
                 UPDATE camera_captures
-                SET status = 'failed', error = %s, updated_at = now()
-                WHERE id = %s AND worker_id = %s
+                SET status = 'failed',
+                    lease_until = NULL,
+                    error = %s,
+                    updated_at = now()
+                WHERE id = %s
+                  AND worker_id = %s
+                  AND status IN ('claimed', 'recording', 'uploading')
                 """,
                 (error, capture_id, worker_id),
             )
+            return cur.rowcount == 1
 
-        self._run(action)
+        return self._run(action)

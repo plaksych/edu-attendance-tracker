@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.schemas.session import CaptureMediaRead, SessionDetail, SessionRead
 from app.services import media as media_service
 from app.services import sessions as sessions_service
+from app.services.weeks import current_local_date
 
 router = APIRouter(tags=["Занятия"])
 
@@ -18,7 +19,7 @@ router = APIRouter(tags=["Занятия"])
     description="Возвращает занятия текущей даты с состоянием обоих замеров и итогом посещаемости.",
 )
 def list_today(db: DbSession = Depends(get_db)):
-    return sessions_service.list_sessions_for_date(db, date.today())
+    return sessions_service.list_sessions_for_date(db, current_local_date())
 
 
 @router.get(

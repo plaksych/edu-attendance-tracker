@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession, joinedload
 
 from app.core.database import get_db
-from app.models import Schedule
+from app.models import Schedule, Session
 from app.schemas.schedule import (
     ScheduleCreate,
     ScheduleImportResult,
@@ -14,7 +14,7 @@ from app.schemas.schedule import (
     WeekTypeRead,
 )
 from app.services import schedule_import, timetable_import
-from app.services.weeks import week_type_for_date
+from app.services.weeks import current_local_date, week_type_for_date
 
 router = APIRouter(prefix="/schedule", tags=["Расписание"])
 
@@ -81,17 +81,36 @@ def create_schedule_item(payload: ScheduleCreate, db: DbSession = Depends(get_db
     "/{item_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Удалить запись расписания",
-    description="Удаляет плановое занятие из расписания по ID.",
+    description=(
+        "Удаляет запись, у которой ещё нет созданных занятий. Записи с историей "
+        "защищены от удаления, чтобы не потерять данные посещаемости."
+    ),
     responses={
         404: {"description": "Запись расписания не найдена"},
+        409: {"description": "Для записи уже есть занятия в истории"},
     },
 )
 def delete_schedule_item(item_id: int, db: DbSession = Depends(get_db)):
     item = db.get(Schedule, item_id)
     if item is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Запись расписания не найдена")
+    has_sessions = db.scalar(
+        select(Session.id).where(Session.schedule_id == item_id).limit(1)
+    )
+    if has_sessions is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Нельзя удалить запись расписания с созданными занятиями",
+        )
     db.delete(item)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "Нельзя удалить запись расписания с созданными занятиями",
+        ) from None
 
 
 @router.get(
@@ -153,5 +172,5 @@ def get_week_type(
     target_date: date | None = Query(default=None, alias="date", description="Дата проверки. Если не указана, используется текущая дата."),
 ):
     """Белая или зелёная неделя для даты (по умолчанию — сегодня)."""
-    resolved = target_date or date.today()
+    resolved = target_date or current_local_date()
     return WeekTypeRead(date=resolved, week_type=week_type_for_date(resolved))
