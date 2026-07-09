@@ -87,7 +87,9 @@ def _process_job(
         heartbeat_thread.join()
 
     try:
-        db.complete_job(job.id, result)
+        if not db.complete_job(job.id, result):
+            logger.warning("Результат задания %s не сохранён: lease потерян", job.id)
+            return
     except Exception as exc:
         logger.exception("Не удалось сохранить результат задания %s", job.id)
         _fail_job(db, job, f"ошибка сохранения результата: {exc}")

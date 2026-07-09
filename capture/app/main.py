@@ -29,11 +29,37 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+class CaptureLeaseLost(Exception):
+    """Задание вернулось в очередь или было взято другим воркером."""
+
+
+def _heartbeat_loop(
+    db: Database, settings: Settings, task: CaptureTask, stop: threading.Event
+) -> None:
+    while not stop.wait(settings.heartbeat_interval_seconds):
+        try:
+            if not db.heartbeat(task.id, settings.worker_id, settings.lease_seconds):
+                logger.warning("Потерян lease задания записи %s", task.id)
+                return
+        except Exception:
+            logger.exception("Не удалось продлить lease задания записи %s", task.id)
+
+
 def process_task(db: Database, storage: Storage, settings: Settings, task: CaptureTask) -> None:
     """Полный цикл одного задания: запись, загрузка, фиксация результата."""
     tmp_path: str | None = None
+    heartbeat_stop = threading.Event()
+    heartbeat_thread: threading.Thread | None = None
     try:
-        db.mark_recording(task.id, settings.worker_id, settings.lease_seconds)
+        if not db.mark_recording(task.id, settings.worker_id, settings.lease_seconds):
+            raise CaptureLeaseLost()
+        heartbeat_thread = threading.Thread(
+            target=_heartbeat_loop,
+            args=(db, settings, task, heartbeat_stop),
+            name=f"capture-heartbeat-{task.id}",
+            daemon=True,
+        )
+        heartbeat_thread.start()
         fd, tmp_path = tempfile.mkstemp(prefix=f"capture-{task.id}-", suffix=".mp4")
         os.close(fd)
         record_clip(
@@ -42,21 +68,28 @@ def process_task(db: Database, storage: Storage, settings: Settings, task: Captu
             tmp_path,
             settings.ffmpeg_extra_timeout_seconds,
         )
-        db.mark_uploading(task.id, settings.worker_id)
+        if not db.mark_uploading(task.id, settings.worker_id):
+            raise CaptureLeaseLost()
         object_key = original_object_key(task.session_id, task.measurement_id, task.camera_id)
         size_bytes = storage.upload_video(tmp_path, object_key)
-        db.mark_completed(
+        if not db.mark_completed(
             task.id,
             settings.worker_id,
             storage.bucket,
             object_key,
             size_bytes,
             task.duration_seconds * 1000,
-        )
+        ):
+            raise CaptureLeaseLost()
         logger.info("Задание %s выполнено: %s (%s байт)", task.id, object_key, size_bytes)
+    except CaptureLeaseLost:
+        logger.warning("Задание записи %s больше не принадлежит этому воркеру", task.id)
     except Exception as exc:  # noqa: BLE001 — любая ошибка фиксируется в задании
         _register_failure(db, settings, task, exc)
     finally:
+        heartbeat_stop.set()
+        if heartbeat_thread is not None:
+            heartbeat_thread.join()
         if tmp_path is not None:
             Path(tmp_path).unlink(missing_ok=True)
 
@@ -66,12 +99,20 @@ def _register_failure(db: Database, settings: Settings, task: CaptureTask, exc: 
     error_text = str(exc) or exc.__class__.__name__
     try:
         if task.attempts >= settings.max_attempts:
-            db.mark_failed(task.id, settings.worker_id, error_text)
+            updated = db.mark_failed(task.id, settings.worker_id, error_text)
+            if not updated:
+                logger.warning("Задание записи %s больше не принадлежит этому воркеру", task.id)
+                return
             logger.error(
                 "Задание %s провалено после %s попыток: %s", task.id, task.attempts, error_text
             )
         else:
-            db.mark_retry(task.id, settings.worker_id, error_text, settings.retry_delay_seconds)
+            updated = db.mark_retry(
+                task.id, settings.worker_id, error_text, settings.retry_delay_seconds
+            )
+            if not updated:
+                logger.warning("Задание записи %s больше не принадлежит этому воркеру", task.id)
+                return
             logger.warning(
                 "Задание %s отложено на повтор (попытка %s): %s",
                 task.id,

@@ -65,14 +65,22 @@ ON CONFLICT (recognition_job_id) DO NOTHING
 
 COMPLETE_JOB_SQL = """
 UPDATE recognition_jobs
-SET status = 'completed', finished_at = now(), error = NULL, updated_at = now()
-WHERE id = %s AND worker_id = %s
+SET status = 'completed',
+    finished_at = now(),
+    lease_until = NULL,
+    error = NULL,
+    updated_at = now()
+WHERE id = %s AND worker_id = %s AND status = 'processing'
 """
 
 FAIL_JOB_SQL = """
 UPDATE recognition_jobs
-SET status = 'failed', error = %s, finished_at = now(), updated_at = now()
-WHERE id = %s AND worker_id = %s
+SET status = 'failed',
+    error = %s,
+    finished_at = now(),
+    lease_until = NULL,
+    updated_at = now()
+WHERE id = %s AND worker_id = %s AND status = 'processing'
 """
 
 RETRY_JOB_SQL = """
@@ -80,7 +88,7 @@ UPDATE recognition_jobs
 SET status = 'retry_wait', error = %s,
     lease_until = now() + make_interval(secs => %s),
     updated_at = now()
-WHERE id = %s AND worker_id = %s
+WHERE id = %s AND worker_id = %s AND status = 'processing'
 """
 
 
@@ -181,11 +189,16 @@ class Database:
 
         return self._run(operation)
 
-    def complete_job(self, job_id: int, result: "ProcessingResult") -> None:
-        """Одной транзакцией пишет recognition_results и переводит задание в completed."""
+    def complete_job(self, job_id: int, result: "ProcessingResult") -> bool:
+        """Сохраняет результат только пока задание принадлежит этому воркеру."""
 
-        def operation(conn: psycopg2.extensions.connection) -> None:
+        def operation(conn: psycopg2.extensions.connection) -> bool:
             with conn, conn.cursor() as cur:
+                cur.execute(
+                    COMPLETE_JOB_SQL, (job_id, settings.worker_id)
+                )
+                if cur.rowcount != 1:
+                    return False
                 cur.execute(
                     INSERT_RESULT_SQL,
                     (
@@ -202,18 +215,18 @@ class Database:
                         settings.annotated_retention_days,
                     ),
                 )
-                cur.execute(COMPLETE_JOB_SQL, (job_id, settings.worker_id))
+                return True
 
-        self._run(operation)
+        return self._run(operation)
 
     def fail_job(
         self, job_id: int, attempts: int, error: str, permanent: bool = False
-    ) -> None:
+    ) -> bool:
         """Переводит задание в failed либо в retry_wait, если попытки не исчерпаны."""
         error = error[:2000]
         final = permanent or attempts >= settings.max_attempts
 
-        def operation(conn: psycopg2.extensions.connection) -> None:
+        def operation(conn: psycopg2.extensions.connection) -> bool:
             with conn, conn.cursor() as cur:
                 if final:
                     cur.execute(FAIL_JOB_SQL, (error, job_id, settings.worker_id))
@@ -222,8 +235,12 @@ class Database:
                         RETRY_JOB_SQL,
                         (error, settings.retry_delay_seconds, job_id, settings.worker_id),
                     )
+                return cur.rowcount == 1
 
-        self._run(operation)
+        updated = self._run(operation)
+        if not updated:
+            logger.warning("Задание %s больше не принадлежит этому воркеру", job_id)
+            return False
         if final:
             logger.error("Задание %s окончательно провалено: %s", job_id, error)
         else:
@@ -234,3 +251,4 @@ class Database:
                 settings.max_attempts,
                 error,
             )
+        return True
