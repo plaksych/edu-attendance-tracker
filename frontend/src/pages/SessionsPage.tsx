@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Measurement, Session, WeekType } from '../api/types'
+import { IconChevronLeft, IconChevronRight } from '../components/icons'
 import { RateCell } from '../components/RateCell'
 import { Dot, MEASUREMENT_STATUS, Pill, SESSION_STATUS } from '../components/status'
 import { fmtClock, fmtTime, shiftDate, today } from '../lib/format'
@@ -85,8 +86,14 @@ export function SessionsPage() {
               {week === 'green' ? 'Зелёная неделя' : 'Белая неделя'}
             </span>
           )}
-          <button className="btn btn--ghost btn--sm" onClick={() => setDate(shiftDate(date, -1))}>
-            ←
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Предыдущий день"
+            title="Предыдущий день"
+            onClick={() => setDate(shiftDate(date, -1))}
+          >
+            <IconChevronLeft />
           </button>
           <input
             type="date"
@@ -94,8 +101,14 @@ export function SessionsPage() {
             value={date}
             onChange={(e) => e.target.value && setDate(e.target.value)}
           />
-          <button className="btn btn--ghost btn--sm" onClick={() => setDate(shiftDate(date, 1))}>
-            →
+          <button
+            className="icon-button"
+            type="button"
+            aria-label="Следующий день"
+            title="Следующий день"
+            onClick={() => setDate(shiftDate(date, 1))}
+          >
+            <IconChevronRight />
           </button>
           {!isToday && (
             <button className="btn btn--ghost" onClick={() => setDate(today())}>

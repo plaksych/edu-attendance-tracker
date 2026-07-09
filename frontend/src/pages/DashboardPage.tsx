@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import { api } from '../api/client'
 import type { Discipline, EntityStats, Group, GroupTimeline, SummaryStats, Teacher } from '../api/types'
+import { IconAttendance, IconCalendarMark, IconCamera, IconPulse } from '../components/icons'
 import { formatRate, RateCell } from '../components/RateCell'
 import { StatCard } from '../components/StatCard'
 import { fmtDateShort } from '../lib/format'
@@ -99,11 +100,15 @@ export function DashboardPage() {
           label="Средняя посещаемость"
           value={formatRate(summary.avg_attendance_rate)}
           hint="по всем занятиям с замерами"
+          icon={<IconAttendance />}
+          tone="teal"
         />
         <StatCard
           label="Занятий сегодня"
           value={summary.sessions_today}
           hint={`проведено всего: ${summary.sessions_finished}`}
+          icon={<IconCalendarMark />}
+          tone="blue"
         />
         <StatCard
           label="Замеры выполнены"
@@ -113,21 +118,20 @@ export function DashboardPage() {
               ? `частичных: ${summary.records_partial}, неудачных: ${summary.records_failed}`
               : 'занятия ещё не измерялись'
           }
+          icon={<IconPulse />}
+          tone="amber"
         />
-        <StatCard label="Групп" value={summary.groups} hint={`камер: ${summary.cameras}`} />
+        <StatCard
+          label="Групп"
+          value={summary.groups}
+          hint={`камер: ${summary.cameras}`}
+          icon={<IconCamera />}
+          tone="green"
+        />
       </div>
 
-      <section className="card section">
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 12,
-            flexWrap: 'wrap',
-            marginBottom: 16,
-          }}
-        >
+      <section className="dashboard-analysis section">
+        <div className="analysis-toolbar">
           <div className="segmented">
             {DIMENSIONS.map((d) => (
               <button
@@ -161,8 +165,8 @@ export function DashboardPage() {
           <div className="loading">Загрузка…</div>
         ) : (
           <>
-            <div className="grid grid--stats">
-              <StatCard label="Занятий с итогом" value={stats.sessions_finished} />
+            <div className="grid grid--stats grid--stats-compact">
+              <StatCard label="Занятий с итогом" value={stats.sessions_finished} tone="blue" />
               <StatCard
                 label="Средняя посещаемость"
                 value={formatRate(stats.avg_rate)}
@@ -171,16 +175,18 @@ export function DashboardPage() {
                     ? `в среднем ${stats.avg_detected} чел.`
                     : undefined
                 }
+                tone="teal"
               />
               <StatCard
                 label="Полные замеры"
                 value={stats.records_complete}
                 hint={`частичных: ${stats.records_partial}, неудачных: ${stats.records_failed}`}
+                tone="green"
               />
             </div>
 
             {dimension === 'groups' && chartData.length > 0 && (
-              <div style={{ marginBottom: 18 }}>
+              <div className="dashboard-chart">
                 <h2>Динамика по датам</h2>
                 <ResponsiveContainer width="100%" height={240}>
                   <LineChart data={chartData} margin={{ top: 4, right: 12, bottom: 0, left: -18 }}>
@@ -202,7 +208,8 @@ export function DashboardPage() {
             )}
 
             <h2>{dimensionMeta.breakdownTitle}</h2>
-            <table className="table">
+            <div className="table-wrap">
+              <table className="table">
               <thead>
                 <tr>
                   <th>Название</th>
@@ -230,7 +237,8 @@ export function DashboardPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+              </table>
+            </div>
           </>
         )}
       </section>
