@@ -1,1 +1,0 @@
-import{r as e}from"./index-D_JpWXmE.js";var t=e(),n={every:`каждая`,white:`белая`,green:`зелёная`};function r({week:e}){return e===`every`?null:(0,t.jsx)(`span`,{className:`badge badge--week-${e}`,children:n[e]})}export{r as t};
