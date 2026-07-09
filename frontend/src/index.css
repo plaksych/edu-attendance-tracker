@@ -130,6 +130,12 @@ h2 {
   font-weight: 720;
 }
 
+.sidebar__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
 .sidebar__logo,
 .mobile-header__mark {
   display: grid;
@@ -1072,22 +1078,37 @@ h2 {
   .sidebar--open { transform: translateX(0); }
 
   .sidebar__dismiss {
-    position: absolute;
-    top: 18px;
-    right: 14px;
-    display: inline-flex;
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
-    color: #ffffff;
+    display: grid;
+    flex: 0 0 auto;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    place-items: center;
+    color: #d9e9e9;
     background: transparent;
-    border-color: rgba(255, 255, 255, 0.28);
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: color 150ms ease, background 150ms ease;
+  }
+
+  .sidebar__dismiss:focus-visible {
+    outline: 3px solid rgba(166, 230, 212, 0.42);
+    outline-offset: 2px;
   }
 
   .sidebar__dismiss:hover {
     color: #ffffff;
     background: rgba(255, 255, 255, 0.12);
   }
+
+  .sidebar__top {
+    align-items: center;
+    min-height: 48px;
+    padding: 0 8px 18px 10px;
+  }
+
+  .sidebar__brand { padding: 0; }
 
   .sidebar-backdrop {
     position: fixed;
