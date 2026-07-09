@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from app.config import settings
+
 logger = logging.getLogger(__name__)
 
 PERSON_CLASS_ID = 0
@@ -43,6 +45,9 @@ class PersonDetector:
                 frame,
                 classes=[PERSON_CLASS_ID],
                 conf=conf,
+                imgsz=settings.inference_image_size,
+                iou=settings.inference_iou_threshold,
+                max_det=settings.inference_max_detections,
                 verbose=False,
             )
         result = results[0]

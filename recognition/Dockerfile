@@ -11,10 +11,15 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch torchvision \
+    && pip install --no-cache-dir -r requirements.txt
 
-# Скачиваем веса на этапе сборки, чтобы контейнер стартовал без доступа в интернет
-RUN python -c "from ultralytics import YOLO; YOLO('yolov8n.pt')"
+ARG MODEL_PATH=yolov8n.pt
+ARG DOWNLOAD_MODEL=true
+# Для локального файла весов укажите DOWNLOAD_MODEL=false и подключите его volume-монтажом.
+RUN if [ "${DOWNLOAD_MODEL}" = "true" ]; then \
+      python -c "from ultralytics import YOLO; YOLO('${MODEL_PATH}')"; \
+    fi
 
 COPY app ./app
 

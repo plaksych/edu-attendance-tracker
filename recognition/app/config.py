@@ -26,6 +26,9 @@ class Settings(BaseSettings):
 
     # Веса модели: файл или имя из зоопарка ultralytics (скачается автоматически)
     model_path: str = "yolov8n.pt"
+    inference_image_size: int = 960
+    inference_iou_threshold: float = 0.5
+    inference_max_detections: int = 300
 
     # Сколько дней доступен размеченный кадр
     annotated_retention_days: int = 90

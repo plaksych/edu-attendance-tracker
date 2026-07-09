@@ -1,6 +1,8 @@
 from datetime import datetime
 
 from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
     DateTime,
     Enum,
     Float,
@@ -14,17 +16,43 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
-from app.models.enums import RecognitionStatus
+from app.models.enums import RecognitionMediaType, RecognitionStatus
+
+
+class RecognitionUpload(Base):
+    """Входной файл для распознавания без камеры и расписания."""
+
+    __tablename__ = "recognition_uploads"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    media_type: Mapped[RecognitionMediaType] = mapped_column(
+        Enum(RecognitionMediaType, name="recognition_media_type")
+    )
+    original_bucket: Mapped[str] = mapped_column(String(100))
+    original_object_key: Mapped[str] = mapped_column(String(700), unique=True)
+    content_type: Mapped[str] = mapped_column(String(100))
+    size_bytes: Mapped[int] = mapped_column(BigInteger)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    job: Mapped["RecognitionJob | None"] = relationship(
+        back_populates="upload", uselist=False, cascade="all, delete-orphan"
+    )
 
 
 class RecognitionJob(Base):
-    """Задание распознавания одного записанного ролика."""
+    """Задание распознавания записи камеры или загруженного файла."""
 
     __tablename__ = "recognition_jobs"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    camera_capture_id: Mapped[int] = mapped_column(
-        ForeignKey("camera_captures.id", ondelete="CASCADE"), unique=True
+    camera_capture_id: Mapped[int | None] = mapped_column(
+        ForeignKey("camera_captures.id", ondelete="CASCADE"), unique=True, nullable=True
+    )
+    upload_id: Mapped[int | None] = mapped_column(
+        ForeignKey("recognition_uploads.id", ondelete="CASCADE"), unique=True, nullable=True
     )
     status: Mapped[RecognitionStatus] = mapped_column(
         Enum(RecognitionStatus, name="recognition_status"),
@@ -48,9 +76,18 @@ class RecognitionJob(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    camera_capture: Mapped["CameraCapture"] = relationship(  # noqa: F821
+    __table_args__ = (
+        CheckConstraint(
+            "(camera_capture_id IS NOT NULL AND upload_id IS NULL) "
+            "OR (camera_capture_id IS NULL AND upload_id IS NOT NULL)",
+            name="ck_recognition_jobs_single_source",
+        ),
+    )
+
+    camera_capture: Mapped["CameraCapture | None"] = relationship(  # noqa: F821
         back_populates="recognition_job"
     )
+    upload: Mapped["RecognitionUpload | None"] = relationship(back_populates="job")
     result: Mapped["RecognitionResult | None"] = relationship(
         back_populates="job", uselist=False
     )

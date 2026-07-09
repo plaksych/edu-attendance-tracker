@@ -34,16 +34,26 @@ SET status = 'processing',
     updated_at = now()
 FROM selected
 WHERE job.id = selected.id
-RETURNING job.id, job.camera_capture_id, job.sample_rate_fps,
+RETURNING job.id, job.camera_capture_id, job.upload_id, job.sample_rate_fps,
     job.confidence_threshold, job.attempts
 """
 
-CAPTURE_CONTEXT_SQL = """
-SELECT cc.original_bucket, cc.original_object_key, cc.camera_id,
-    cc.measurement_id, m.session_id
-FROM camera_captures cc
-JOIN measurements m ON m.id = cc.measurement_id
-WHERE cc.id = %s
+SOURCE_CONTEXT_SQL = """
+SELECT
+    CASE WHEN job.upload_id IS NULL THEN 'capture' ELSE 'upload' END AS source_kind,
+    CASE WHEN job.upload_id IS NULL THEN 'video' ELSE ru.media_type::text END AS media_type,
+    COALESCE(cc.original_bucket, ru.original_bucket) AS original_bucket,
+    COALESCE(cc.original_object_key, ru.original_object_key) AS original_object_key,
+    COALESCE(ru.filename, cc.original_object_key) AS filename,
+    cc.camera_id,
+    cc.measurement_id,
+    measurement.session_id,
+    ru.id
+FROM recognition_jobs job
+LEFT JOIN camera_captures cc ON cc.id = job.camera_capture_id
+LEFT JOIN measurements measurement ON measurement.id = cc.measurement_id
+LEFT JOIN recognition_uploads ru ON ru.id = job.upload_id
+WHERE job.id = %s
 """
 
 HEARTBEAT_SQL = """
@@ -95,19 +105,24 @@ WHERE id = %s AND worker_id = %s AND status = 'processing'
 @dataclass
 class ClaimedJob:
     id: int
-    camera_capture_id: int
+    camera_capture_id: int | None
+    upload_id: int | None
     sample_rate_fps: float
     confidence_threshold: float
     attempts: int
 
 
 @dataclass
-class CaptureContext:
+class SourceContext:
+    source_kind: str
+    media_type: str
     original_bucket: str | None
     original_object_key: str | None
-    camera_id: int
-    measurement_id: int
-    session_id: int
+    filename: str | None
+    camera_id: int | None
+    measurement_id: int | None
+    session_id: int | None
+    upload_id: int | None
 
 
 class Database:
@@ -151,28 +166,33 @@ class Database:
             return ClaimedJob(
                 id=row[0],
                 camera_capture_id=row[1],
-                sample_rate_fps=float(row[2]),
-                confidence_threshold=float(row[3]),
-                attempts=row[4],
+                upload_id=row[2],
+                sample_rate_fps=float(row[3]),
+                confidence_threshold=float(row[4]),
+                attempts=row[5],
             )
 
         return self._run(operation)
 
-    def fetch_capture_context(self, camera_capture_id: int) -> CaptureContext | None:
-        """Возвращает данные записи камеры и session_id для построения ключей объектов."""
+    def fetch_source_context(self, job_id: int) -> SourceContext | None:
+        """Возвращает источник задания и параметры для построения ключа результата."""
 
-        def operation(conn: psycopg2.extensions.connection) -> CaptureContext | None:
+        def operation(conn: psycopg2.extensions.connection) -> SourceContext | None:
             with conn, conn.cursor() as cur:
-                cur.execute(CAPTURE_CONTEXT_SQL, (camera_capture_id,))
+                cur.execute(SOURCE_CONTEXT_SQL, (job_id,))
                 row = cur.fetchone()
             if row is None:
                 return None
-            return CaptureContext(
-                original_bucket=row[0],
-                original_object_key=row[1],
-                camera_id=row[2],
-                measurement_id=row[3],
-                session_id=row[4],
+            return SourceContext(
+                source_kind=row[0],
+                media_type=row[1],
+                original_bucket=row[2],
+                original_object_key=row[3],
+                filename=row[4],
+                camera_id=row[5],
+                measurement_id=row[6],
+                session_id=row[7],
+                upload_id=row[8],
             )
 
         return self._run(operation)

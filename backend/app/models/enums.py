@@ -59,6 +59,13 @@ class RecognitionStatus(str, enum.Enum):
     cancelled = "cancelled"
 
 
+class RecognitionMediaType(str, enum.Enum):
+    """Тип входного файла для самостоятельного задания распознавания."""
+
+    image = "image"
+    video = "video"
+
+
 class AttendanceCalculationStatus(str, enum.Enum):
     """complete — оба замера успешны; partial — один; failed — ни одного."""
 

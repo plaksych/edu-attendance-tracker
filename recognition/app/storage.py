@@ -17,6 +17,11 @@ def annotated_object_key(session_id: int, measurement_id: int, camera_id: int) -
     )
 
 
+def upload_annotated_object_key(upload_id: int) -> str:
+    """Ключ размеченного кадра для файла, загруженного без камеры."""
+    return f"annotated/uploads/{upload_id}.jpg"
+
+
 class ObjectStorage:
     def __init__(self) -> None:
         self._client = Minio(
