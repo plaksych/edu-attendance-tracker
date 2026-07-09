@@ -1,1 +1,0 @@
-import{j as r}from"./index-ejAliNue.js";const n={every:"каждая",white:"белая",green:"зелёная"};function a({week:e}){return e==="every"?null:r.jsx("span",{className:`badge badge--week-${e}`,children:n[e]})}export{a as W};
