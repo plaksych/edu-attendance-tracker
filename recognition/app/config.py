@@ -29,6 +29,8 @@ class Settings(BaseSettings):
     inference_image_size: int = 960
     inference_iou_threshold: float = 0.5
     inference_max_detections: int = 300
+    max_sampled_frames: int = Field(default=180, ge=1)
+    evaluation_tolerance_people: int = Field(default=1, ge=0)
 
     # Сколько дней доступен размеченный кадр
     annotated_retention_days: int = 90

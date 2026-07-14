@@ -48,7 +48,8 @@ SELECT
     cc.camera_id,
     cc.measurement_id,
     measurement.session_id,
-    ru.id
+    ru.id,
+    ru.reference_people_count
 FROM recognition_jobs job
 LEFT JOIN camera_captures cc ON cc.id = job.camera_capture_id
 LEFT JOIN measurements measurement ON measurement.id = cc.measurement_id
@@ -67,9 +68,10 @@ WHERE id = %s AND worker_id = %s AND status = 'processing'
 INSERT_RESULT_SQL = """
 INSERT INTO recognition_results (
     recognition_job_id, people_count, detected_median, detected_percentile_75,
-    detected_max, average_confidence, sampled_frames, representative_frame_ms,
-    annotated_bucket, annotated_object_key, media_expires_at
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now() + make_interval(days => %s))
+    detected_max, average_confidence, count_stddev, sampled_frames, source_frames,
+    source_duration_ms, representative_frame_ms, absolute_error, relative_error,
+    within_tolerance, annotated_bucket, annotated_object_key, media_expires_at
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now() + make_interval(days => %s))
 ON CONFLICT (recognition_job_id) DO NOTHING
 """
 
@@ -123,6 +125,7 @@ class SourceContext:
     measurement_id: int | None
     session_id: int | None
     upload_id: int | None
+    reference_people_count: int | None
 
 
 class Database:
@@ -193,6 +196,7 @@ class Database:
                 measurement_id=row[6],
                 session_id=row[7],
                 upload_id=row[8],
+                reference_people_count=row[9],
             )
 
         return self._run(operation)
@@ -228,8 +232,14 @@ class Database:
                         result.detected_percentile_75,
                         result.detected_max,
                         result.average_confidence,
+                        result.count_stddev,
                         result.sampled_frames,
+                        result.source_frames,
+                        result.source_duration_ms,
                         result.representative_frame_ms,
+                        result.absolute_error,
+                        result.relative_error,
+                        result.within_tolerance,
                         result.annotated_bucket,
                         result.annotated_object_key,
                         settings.annotated_retention_days,

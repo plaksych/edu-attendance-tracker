@@ -1,11 +1,14 @@
+import statistics
+
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession, selectinload
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.models import RecognitionJob, RecognitionUpload
+from app.models import RecognitionJob, RecognitionResult, RecognitionUpload
 from app.schemas.recognition import (
+    RecognitionEvaluationSummary,
     RecognitionUploadMediaRead,
     RecognitionUploadRead,
 )
@@ -55,6 +58,17 @@ def create_upload(
         le=0.95,
         description="Минимальная уверенность детектора",
     ),
+    label: str | None = Form(
+        default=None,
+        max_length=160,
+        description="Краткое название материала для журнала проверки",
+    ),
+    reference_people_count: int | None = Form(
+        default=None,
+        ge=0,
+        le=1000,
+        description="Число людей, вручную отмеченное на материале",
+    ),
     db: DbSession = Depends(get_db),
 ):
     try:
@@ -78,6 +92,8 @@ def create_upload(
         original_object_key=object_key,
         content_type=descriptor.content_type,
         size_bytes=descriptor.size_bytes,
+        label=label.strip() if label and label.strip() else None,
+        reference_people_count=reference_people_count,
     )
     upload.job = RecognitionJob(
         model_name=settings.recognition_model_name,
@@ -96,6 +112,41 @@ def create_upload(
             "Не удалось создать задание распознавания",
         ) from exc
     return _get_upload(upload.id, db)
+
+
+@router.get(
+    "/evaluation/summary",
+    response_model=RecognitionEvaluationSummary,
+    summary="Получить качество по материалам с ручной разметкой",
+    description=(
+        "Считает ошибки только по завершённым загрузкам, в которых при создании "
+        "задано эталонное число людей."
+    ),
+)
+def get_evaluation_summary(db: DbSession):
+    rows = db.execute(
+        select(
+            RecognitionResult.absolute_error,
+            RecognitionResult.relative_error,
+            RecognitionResult.within_tolerance,
+        )
+        .join(RecognitionJob, RecognitionResult.recognition_job_id == RecognitionJob.id)
+        .join(RecognitionUpload, RecognitionJob.upload_id == RecognitionUpload.id)
+        .where(
+            RecognitionUpload.reference_people_count.is_not(None),
+            RecognitionResult.absolute_error.is_not(None),
+        )
+    ).all()
+    absolute_errors = [int(row.absolute_error) for row in rows if row.absolute_error is not None]
+    relative_errors = [float(row.relative_error) for row in rows if row.relative_error is not None]
+    return RecognitionEvaluationSummary(
+        checked_materials=len(absolute_errors),
+        within_tolerance_count=sum(bool(row.within_tolerance) for row in rows),
+        mean_absolute_error=(statistics.fmean(absolute_errors) if absolute_errors else None),
+        median_absolute_error=(statistics.median(absolute_errors) if absolute_errors else None),
+        max_absolute_error=max(absolute_errors) if absolute_errors else None,
+        mean_relative_error=(statistics.fmean(relative_errors) if relative_errors else None),
+    )
 
 
 @router.get(

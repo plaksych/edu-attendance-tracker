@@ -55,6 +55,7 @@ class ImageProcessorTests(unittest.TestCase):
             measurement_id=None,
             session_id=None,
             upload_id=42,
+            reference_people_count=4,
         )
 
         result = processor.process(job, source)
@@ -62,6 +63,10 @@ class ImageProcessorTests(unittest.TestCase):
         self.assertEqual(result.people_count, 3)
         self.assertEqual(result.sampled_frames, 1)
         self.assertEqual(result.representative_frame_ms, 0)
+        self.assertEqual(result.absolute_error, 1)
+        self.assertEqual(result.relative_error, 0.25)
+        self.assertTrue(result.within_tolerance)
+        self.assertEqual(result.count_stddev, 0.0)
         self.assertEqual(result.annotated_object_key, "annotated/uploads/42.jpg")
         self.assertIsNotNone(storage.uploaded)
         assert storage.uploaded is not None

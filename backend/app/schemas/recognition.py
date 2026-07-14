@@ -34,8 +34,21 @@ class RecognitionUploadRead(BaseModel):
     media_type: RecognitionMediaType
     content_type: str
     size_bytes: int
+    label: str | None = Field(description="Краткое название проверочного материала")
+    reference_people_count: int | None = Field(
+        description="Ручной эталон для расчёта ошибки", examples=[8]
+    )
     created_at: datetime
     job: RecognitionUploadJobRead
+
+
+class RecognitionEvaluationSummary(BaseModel):
+    checked_materials: int = Field(description="Число материалов с ручным эталоном")
+    within_tolerance_count: int = Field(description="Число результатов в допустимой ошибке")
+    mean_absolute_error: float | None = Field(description="Средняя абсолютная ошибка")
+    median_absolute_error: float | None = Field(description="Медианная абсолютная ошибка")
+    max_absolute_error: int | None = Field(description="Максимальная абсолютная ошибка")
+    mean_relative_error: float | None = Field(description="Средняя относительная ошибка")
 
 
 class RecognitionUploadMediaRead(BaseModel):
