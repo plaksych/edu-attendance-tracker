@@ -34,6 +34,8 @@ Backend предоставляет REST API с интерактивными сх
 ```bash
 curl -X POST http://localhost:8000/api/v1/recognition/uploads \
   -F "file=@auditorium.jpg" \
+  -F "label=Аудитория 305, дневной замер" \
+  -F "reference_people_count=8" \
   -F "confidence_threshold=0.35"
 ```
 
@@ -60,6 +62,16 @@ curl http://localhost:8000/api/v1/recognition/uploads/42/media
 Первый endpoint возвращает состояние очереди и метрики результата. Второй
 выдаёт краткоживущие ссылки на исходный файл и размеченный кадр, когда они
 доступны.
+
+### Сводка по ручной разметке
+
+```bash
+curl http://localhost:8000/api/v1/recognition/evaluation/summary
+```
+
+В сводку попадают только завершённые материалы, для которых при загрузке было
+передано `reference_people_count`. Поле `within_tolerance_count` использует
+допуск worker из `EVALUATION_TOLERANCE_PEOPLE`.
 
 ## Семантика ошибок
 
