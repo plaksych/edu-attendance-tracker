@@ -8,6 +8,7 @@ import {
   IconDashboard,
   IconLogo,
   IconMenu,
+  IconRecognition,
   IconSchedule,
   IconSessions,
 } from './icons'
@@ -21,6 +22,7 @@ interface NavItem {
 const monitoring: NavItem[] = [
   { to: '/', label: 'Дашборд', icon: <IconDashboard /> },
   { to: '/sessions', label: 'Занятия', icon: <IconSessions /> },
+  { to: '/recognition', label: 'Распознавание', icon: <IconRecognition /> },
 ]
 
 const setup: NavItem[] = [

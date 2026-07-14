@@ -9,6 +9,9 @@ import type {
   Group,
   GroupTimeline,
   ImportResult,
+  RecognitionEvaluationSummary,
+  RecognitionUpload,
+  RecognitionUploadMedia,
   ScheduleItem,
   Session,
   SessionDetail,
@@ -106,6 +109,29 @@ const liveApi = {
   getSession: (id: number) => request<SessionDetail>(`/sessions/${id}`),
   cancelSession: (id: number) => request<Session>(`/sessions/${id}/cancel`, { method: 'POST' }),
   getCaptureMedia: (captureId: number) => request<CaptureMedia>(`/captures/${captureId}/media`),
+
+  getRecognitionUploads: () => request<RecognitionUpload[]>('/recognition/uploads'),
+  getRecognitionUploadMedia: (uploadId: number) =>
+    request<RecognitionUploadMedia>(`/recognition/uploads/${uploadId}/media`),
+  getRecognitionEvaluationSummary: () =>
+    request<RecognitionEvaluationSummary>('/recognition/evaluation/summary'),
+  uploadRecognition: (payload: {
+    file: File
+    sample_rate_fps: number
+    confidence_threshold: number
+    label?: string
+    reference_people_count?: number
+  }) => {
+    const form = new FormData()
+    form.append('file', payload.file)
+    form.append('sample_rate_fps', String(payload.sample_rate_fps))
+    form.append('confidence_threshold', String(payload.confidence_threshold))
+    if (payload.label) form.append('label', payload.label)
+    if (payload.reference_people_count !== undefined) {
+      form.append('reference_people_count', String(payload.reference_people_count))
+    }
+    return request<RecognitionUpload>('/recognition/uploads', { method: 'POST', body: form })
+  },
 
   getSummary: () => request<SummaryStats>('/stats/summary'),
   getGroupStats: (id: number) => request<EntityStats>(`/stats/groups/${id}`),

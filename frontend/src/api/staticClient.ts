@@ -10,6 +10,9 @@ import type {
   Group,
   GroupTimeline,
   ImportResult,
+  RecognitionEvaluationSummary,
+  RecognitionUpload,
+  RecognitionUploadMedia,
   ScheduleItem,
   Session,
   SessionDetail,
@@ -37,11 +40,141 @@ interface ScheduleFilter {
 }
 
 const DATA_URL = `${import.meta.env.BASE_URL}demo-data.json`
+const RECOGNITION_DEMO_URL = `${import.meta.env.BASE_URL}recognition-demo/`
 const OFFSET_MINUTES = 15
 
 let statePromise: Promise<DemoData> | null = null
 let state: DemoData | null = null
 const cancelledSessions = new Set<number>()
+
+const recognitionUploads: RecognitionUpload[] = [
+  {
+    id: 104,
+    filename: 'занятие_аудитория_305.mp4',
+    media_type: 'video',
+    content_type: 'video/mp4',
+    size_bytes: 1_161_216,
+    label: 'Аудитория 305, дневной замер',
+    reference_people_count: 8,
+    created_at: '2026-07-14T10:08:00+03:00',
+    job: {
+      id: 204,
+      status: 'completed',
+      attempts: 1,
+      model_name: 'yolov8n',
+      model_version: '8',
+      sample_rate_fps: 2,
+      confidence_threshold: 0.35,
+      started_at: '2026-07-14T10:08:05+03:00',
+      finished_at: '2026-07-14T10:08:19+03:00',
+      error: null,
+      result: {
+        people_count: 8,
+        detected_median: 8,
+        detected_percentile_75: 8,
+        detected_max: 9,
+        average_confidence: 0.89,
+        count_stddev: 0.43,
+        sampled_frames: 18,
+        source_frames: 270,
+        source_duration_ms: 9000,
+        representative_frame_ms: 4500,
+        absolute_error: 0,
+        relative_error: 0,
+        within_tolerance: true,
+        media_expires_at: null,
+      },
+    },
+  },
+  {
+    id: 103,
+    filename: 'лекция_поток_214.jpg',
+    media_type: 'image',
+    content_type: 'image/jpeg',
+    size_bytes: 206_848,
+    label: 'Поточная аудитория, фронтальный ракурс',
+    reference_people_count: 12,
+    created_at: '2026-07-14T09:57:00+03:00',
+    job: {
+      id: 203,
+      status: 'completed',
+      attempts: 1,
+      model_name: 'yolov8n',
+      model_version: '8',
+      sample_rate_fps: 1,
+      confidence_threshold: 0.35,
+      started_at: '2026-07-14T09:57:04+03:00',
+      finished_at: '2026-07-14T09:57:08+03:00',
+      error: null,
+      result: {
+        people_count: 11,
+        detected_median: 11,
+        detected_percentile_75: 11,
+        detected_max: 11,
+        average_confidence: 0.84,
+        count_stddev: 0,
+        sampled_frames: 1,
+        source_frames: 1,
+        source_duration_ms: 0,
+        representative_frame_ms: 0,
+        absolute_error: 1,
+        relative_error: 1 / 12,
+        within_tolerance: true,
+        media_expires_at: null,
+      },
+    },
+  },
+  {
+    id: 102,
+    filename: 'семинар_вечер_118.jpg',
+    media_type: 'image',
+    content_type: 'image/jpeg',
+    size_bytes: 206_848,
+    label: 'Семинар, сниженная освещённость',
+    reference_people_count: 6,
+    created_at: '2026-07-14T09:44:00+03:00',
+    job: {
+      id: 202,
+      status: 'completed',
+      attempts: 1,
+      model_name: 'yolov8n',
+      model_version: '8',
+      sample_rate_fps: 1,
+      confidence_threshold: 0.4,
+      started_at: '2026-07-14T09:44:03+03:00',
+      finished_at: '2026-07-14T09:44:06+03:00',
+      error: null,
+      result: {
+        people_count: 6,
+        detected_median: 6,
+        detected_percentile_75: 6,
+        detected_max: 6,
+        average_confidence: 0.87,
+        count_stddev: 0,
+        sampled_frames: 1,
+        source_frames: 1,
+        source_duration_ms: 0,
+        representative_frame_ms: 0,
+        absolute_error: 0,
+        relative_error: 0,
+        within_tolerance: true,
+        media_expires_at: null,
+      },
+    },
+  },
+]
+
+function recognitionMedia(uploadId: number): RecognitionUploadMedia {
+  const filename = uploadId === 103 ? 'lecture-twelve.jpg' : uploadId === 102 ? 'seminar-six.jpg' : 'classroom-eight.jpg'
+  const source = `${RECOGNITION_DEMO_URL}${filename}`
+  return {
+    source_url: uploadId === 104 ? `${RECOGNITION_DEMO_URL}classroom-eight.mp4` : source,
+    source_unavailable_reason: null,
+    annotated_url: source,
+    annotated_unavailable_reason: null,
+    expires_in_seconds: 0,
+  }
+}
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -151,8 +284,14 @@ function capturesFor(schedule: ScheduleItem, date: string, measurementId: number
       detected_percentile_75: count + (index % 2),
       detected_max: count + 1,
       average_confidence: 0.82,
+      count_stddev: 0.4,
       sampled_frames: 20,
+      source_frames: 500,
+      source_duration_ms: 20_000,
       representative_frame_ms: 9_500,
+      absolute_error: null,
+      relative_error: null,
+      within_tolerance: null,
       media_expires_at: null,
     },
   }))
@@ -441,6 +580,43 @@ export const staticApi = {
       annotated_unavailable_reason: 'Медиа недоступно в статическом режиме',
       expires_in_seconds: 0,
     }
+  },
+
+  async getRecognitionUploads(): Promise<RecognitionUpload[]> {
+    return clone(recognitionUploads)
+  },
+  async getRecognitionUploadMedia(uploadId: number): Promise<RecognitionUploadMedia> {
+    if (!recognitionUploads.some((item) => item.id === uploadId)) {
+      throw new Error('Материал распознавания не найден')
+    }
+    return recognitionMedia(uploadId)
+  },
+  async getRecognitionEvaluationSummary(): Promise<RecognitionEvaluationSummary> {
+    const completed = recognitionUploads
+      .map((item) => item.job.result)
+      .filter((result): result is NonNullable<typeof result> => result !== null)
+      .filter((result) => result.absolute_error !== null)
+    const absoluteErrors = completed.map((result) => result.absolute_error ?? 0)
+    const relativeErrors = completed
+      .map((result) => result.relative_error)
+      .filter((value): value is number => value !== null)
+    return {
+      checked_materials: completed.length,
+      within_tolerance_count: completed.filter((result) => result.within_tolerance).length,
+      mean_absolute_error: absoluteErrors.reduce((sum, value) => sum + value, 0) / absoluteErrors.length,
+      median_absolute_error: absoluteErrors.sort((a, b) => a - b)[Math.floor(absoluteErrors.length / 2)],
+      max_absolute_error: Math.max(...absoluteErrors),
+      mean_relative_error: relativeErrors.reduce((sum, value) => sum + value, 0) / relativeErrors.length,
+    }
+  },
+  async uploadRecognition(_payload: {
+    file: File
+    sample_rate_fps: number
+    confidence_threshold: number
+    label?: string
+    reference_people_count?: number
+  }): Promise<RecognitionUpload> {
+    throw new Error('Загрузка доступна при подключённом backend')
   },
 
   async getSummary(): Promise<SummaryStats> {

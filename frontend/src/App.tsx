@@ -20,6 +20,9 @@ const CamerasPage = lazy(() =>
 const CatalogPage = lazy(() =>
   import('./pages/CatalogPage').then(({ CatalogPage }) => ({ default: CatalogPage })),
 )
+const RecognitionPage = lazy(() =>
+  import('./pages/RecognitionPage').then(({ RecognitionPage }) => ({ default: RecognitionPage })),
+)
 
 export default function App() {
   return (
@@ -31,6 +34,7 @@ export default function App() {
           <Route path="sessions/:id" element={<SessionDetailPage />} />
           <Route path="schedule" element={<SchedulePage />} />
           <Route path="cameras" element={<CamerasPage />} />
+          <Route path="recognition" element={<RecognitionPage />} />
           <Route path="catalog" element={<CatalogPage />} />
         </Route>
       </Routes>
