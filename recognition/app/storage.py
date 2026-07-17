@@ -5,16 +5,19 @@ import logging
 from minio import Minio
 
 from app.config import settings
+from app.media_keys import annotated_camera_object_key, annotated_upload_object_key
 
 logger = logging.getLogger(__name__)
 
 
 def annotated_object_key(session_id: int, measurement_id: int, camera_id: int) -> str:
     """Ключ размеченного кадра; повторная попытка перезаписывает тот же объект."""
-    return (
-        f"annotated/sessions/{session_id}/measurements/{measurement_id}"
-        f"/cameras/{camera_id}.jpg"
-    )
+    return annotated_camera_object_key(session_id, measurement_id, camera_id)
+
+
+def upload_annotated_object_key(upload_id: int) -> str:
+    """Ключ размеченного кадра для файла, загруженного без камеры."""
+    return annotated_upload_object_key(upload_id)
 
 
 class ObjectStorage:

@@ -50,22 +50,23 @@ def _process_job(
     db: Database, heartbeat_db: Database, processor: JobProcessor, job: ClaimedJob
 ) -> None:
     logger.info(
-        "Задание %s принято (запись %s, попытка %s)",
+        "Задание %s принято (%s %s, попытка %s)",
         job.id,
-        job.camera_capture_id,
+        "загрузка" if job.upload_id is not None else "запись",
+        job.upload_id if job.upload_id is not None else job.camera_capture_id,
         job.attempts,
     )
     try:
-        context = db.fetch_capture_context(job.camera_capture_id)
+        context = db.fetch_source_context(job.id)
     except Exception as exc:
-        logger.exception("Не удалось получить контекст записи для задания %s", job.id)
-        _fail_job(db, job, f"ошибка чтения контекста записи: {exc}")
+        logger.exception("Не удалось получить источник для задания %s", job.id)
+        _fail_job(db, job, f"ошибка чтения источника: {exc}")
         return
     if context is None:
-        _fail_job(db, job, "запись камеры не найдена", permanent=True)
+        _fail_job(db, job, "источник распознавания не найден", permanent=True)
         return
     if context.original_object_key is None:
-        _fail_job(db, job, "нет исходного видео", permanent=True)
+        _fail_job(db, job, "нет исходного файла", permanent=True)
         return
 
     heartbeat_stop = threading.Event()

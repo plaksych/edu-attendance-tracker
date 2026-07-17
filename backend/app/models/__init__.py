@@ -8,10 +8,11 @@ from app.models.enums import (
     CaptureStatus,
     MeasurementStatus,
     MeasurementType,
+    RecognitionMediaType,
     RecognitionStatus,
 )
 from app.models.measurement import CameraCapture, Measurement
-from app.models.recognition import RecognitionJob, RecognitionResult
+from app.models.recognition import RecognitionJob, RecognitionResult, RecognitionUpload
 from app.models.schedule import Schedule, Session, SessionStatus, WeekType
 
 __all__ = [
@@ -30,8 +31,10 @@ __all__ = [
     "MeasurementStatus",
     "MeasurementType",
     "RecognitionJob",
+    "RecognitionMediaType",
     "RecognitionResult",
     "RecognitionStatus",
+    "RecognitionUpload",
     "Schedule",
     "Session",
     "SessionStatus",

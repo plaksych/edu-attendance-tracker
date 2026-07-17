@@ -26,9 +26,23 @@ class RecognitionResultRead(BaseModel):
     average_confidence: float | None = Field(
         description="Средняя уверенность детектора", examples=[0.82]
     )
+    count_stddev: float = Field(
+        description="Стандартное отклонение числа людей по кадрам", examples=[0.5]
+    )
     sampled_frames: int = Field(description="Число проанализированных кадров", examples=[20])
+    source_frames: int = Field(description="Число кадров в исходном видео", examples=[750])
+    source_duration_ms: int = Field(description="Длительность исходного видео, мс", examples=[30000])
     representative_frame_ms: int = Field(
         description="Позиция репрезентативного кадра в ролике, мс", examples=[9500]
+    )
+    absolute_error: int | None = Field(
+        description="Абсолютная ошибка относительно ручного эталона", examples=[1]
+    )
+    relative_error: float | None = Field(
+        description="Относительная ошибка относительно ручного эталона", examples=[0.04]
+    )
+    within_tolerance: bool | None = Field(
+        description="Укладывается ли ошибка в допустимое число человек"
     )
     media_expires_at: datetime | None = Field(
         description="Когда размеченный кадр будет удалён по сроку хранения"

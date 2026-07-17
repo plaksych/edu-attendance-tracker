@@ -8,6 +8,7 @@ import {
   IconDashboard,
   IconLogo,
   IconMenu,
+  IconRecognition,
   IconSchedule,
   IconSessions,
 } from './icons'
@@ -21,6 +22,7 @@ interface NavItem {
 const monitoring: NavItem[] = [
   { to: '/', label: 'Дашборд', icon: <IconDashboard /> },
   { to: '/sessions', label: 'Занятия', icon: <IconSessions /> },
+  { to: '/recognition', label: 'Распознавание', icon: <IconRecognition /> },
 ]
 
 const setup: NavItem[] = [
@@ -82,18 +84,20 @@ export function Layout() {
         />
       )}
       <nav id="main-navigation" className={`sidebar${menuOpen ? ' sidebar--open' : ''}`} aria-label="Основная навигация">
-        <div className="sidebar__brand">
-          <div className="sidebar__logo">
-            <IconLogo />
+        <div className="sidebar__top">
+          <div className="sidebar__brand">
+            <div className="sidebar__logo">
+              <IconLogo />
+            </div>
+            <div>
+              Посещаемость
+              <small>контроль занятий</small>
+            </div>
           </div>
-          <div>
-            Посещаемость
-            <small>контроль занятий</small>
-          </div>
+          <button type="button" className="sidebar__dismiss" aria-label="Закрыть навигацию" onClick={closeMenu}>
+            <IconClose />
+          </button>
         </div>
-        <button type="button" className="icon-button sidebar__dismiss" aria-label="Закрыть навигацию" onClick={closeMenu}>
-          <IconClose />
-        </button>
         <div className="sidebar__section">Мониторинг</div>
         <Links items={monitoring} onNavigate={closeMenu} />
         <div className="sidebar__section">Настройка</div>

@@ -99,9 +99,68 @@ export interface RecognitionResult {
   detected_percentile_75: number
   detected_max: number
   average_confidence: number | null
+  count_stddev: number
   sampled_frames: number
+  source_frames: number
+  source_duration_ms: number
   representative_frame_ms: number
+  absolute_error: number | null
+  relative_error: number | null
+  within_tolerance: boolean | null
   media_expires_at: string | null
+}
+
+export type RecognitionStatus =
+  | 'pending'
+  | 'processing'
+  | 'retry_wait'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export type RecognitionMediaType = 'image' | 'video'
+
+export interface RecognitionUploadJob {
+  id: number
+  status: RecognitionStatus
+  attempts: number
+  model_name: string
+  model_version: string
+  sample_rate_fps: number
+  confidence_threshold: number
+  started_at: string | null
+  finished_at: string | null
+  error: string | null
+  result: RecognitionResult | null
+}
+
+export interface RecognitionUpload {
+  id: number
+  filename: string
+  media_type: RecognitionMediaType
+  content_type: string
+  size_bytes: number
+  label: string | null
+  reference_people_count: number | null
+  created_at: string
+  job: RecognitionUploadJob
+}
+
+export interface RecognitionUploadMedia {
+  source_url: string | null
+  source_unavailable_reason: string | null
+  annotated_url: string | null
+  annotated_unavailable_reason: string | null
+  expires_in_seconds: number
+}
+
+export interface RecognitionEvaluationSummary {
+  checked_materials: number
+  within_tolerance_count: number
+  mean_absolute_error: number | null
+  median_absolute_error: number | null
+  max_absolute_error: number | null
+  mean_relative_error: number | null
 }
 
 export interface Capture {

@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     # Сроки хранения медиа; должны совпадать с lifecycle policy бакета
     original_retention_days: int = 30
     annotated_retention_days: int = 90
+    recognition_upload_max_size_mb: int = 512
+    recognition_model_name: str = "yolov8n"
+    recognition_model_version: str = "8"
 
     # --- Measurement Scheduler ---
     scheduler_enabled: bool = True

@@ -250,6 +250,7 @@ media/
 *.zip
 output/
 docs/
+tmp/
 
 # Локальные таблицы и выгрузки
 *.xlsx

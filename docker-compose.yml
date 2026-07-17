@@ -64,6 +64,9 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-attendance-clips}
       TIMEZONE: ${TIMEZONE:-Europe/Moscow}
       SEMESTER_START: ${SEMESTER_START:-2026-02-09}
+      RECOGNITION_UPLOAD_MAX_SIZE_MB: ${RECOGNITION_UPLOAD_MAX_SIZE_MB:-512}
+      RECOGNITION_MODEL_NAME: ${RECOGNITION_MODEL_NAME:-yolov8n}
+      RECOGNITION_MODEL_VERSION: ${RECOGNITION_MODEL_VERSION:-8}
       CORS_ORIGINS: http://localhost:3000,http://localhost:5173
     depends_on:
       db:
@@ -95,7 +98,11 @@ services:
         condition: service_healthy
 
   recognition-worker:
-    build: ./recognition
+    build:
+      context: ./recognition
+      args:
+        MODEL_PATH: ${MODEL_PATH:-yolov8n.pt}
+        DOWNLOAD_MODEL: ${DOWNLOAD_MODEL:-true}
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${DB_USER:-attendance}:${DB_PASSWORD:-attendance}@db:5432/${DB_NAME:-attendance}
@@ -103,6 +110,12 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
       MINIO_BUCKET: ${MINIO_BUCKET:-attendance-clips}
+      MODEL_PATH: ${MODEL_PATH:-yolov8n.pt}
+      INFERENCE_IMAGE_SIZE: ${INFERENCE_IMAGE_SIZE:-960}
+      INFERENCE_IOU_THRESHOLD: ${INFERENCE_IOU_THRESHOLD:-0.5}
+      INFERENCE_MAX_DETECTIONS: ${INFERENCE_MAX_DETECTIONS:-300}
+      MAX_SAMPLED_FRAMES: ${MAX_SAMPLED_FRAMES:-180}
+      EVALUATION_TOLERANCE_PEOPLE: ${EVALUATION_TOLERANCE_PEOPLE:-1}
     depends_on:
       backend:
         condition: service_healthy
