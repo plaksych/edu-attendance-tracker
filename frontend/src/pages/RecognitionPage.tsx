@@ -7,6 +7,7 @@ import type {
   RecognitionUploadMedia,
 } from '../api/types'
 import { IconImage, IconRecognition, IconRefresh, IconUpload, IconVideo } from '../components/icons'
+import { LocalRecognitionDialog } from '../components/LocalRecognitionDialog'
 import { Modal } from '../components/Modal'
 import { StatCard } from '../components/StatCard'
 import { fmtBytes, fmtClock } from '../lib/format'
@@ -249,14 +250,14 @@ export function RecognitionPage() {
           <button className="icon-button" type="button" aria-label="Обновить данные" title="Обновить данные" onClick={() => void load()}>
             <IconRefresh />
           </button>
-          <button className="btn" type="button" onClick={() => setDialogOpen(true)} disabled={isStaticData} title={isStaticData ? 'В публикации доступен демонстрационный набор' : undefined}>
+          <button className="btn" type="button" onClick={() => setDialogOpen(true)}>
             <IconUpload />
-            Добавить материал
+            {isStaticData ? 'Проверить файл' : 'Добавить материал'}
           </button>
         </div>
       </header>
 
-      {isStaticData && <div className="recognition-mode">Демонстрационный набор: три изображения и короткий ролик для показа интерфейса и метрик.</div>}
+      {isStaticData && <div className="recognition-mode">Публикация: локальная проверка фото и видео, демонстрационный журнал и контрольные кадры.</div>}
       {error && <div className="alert alert--error">{error}</div>}
 
       <section className="grid grid--stats recognition-stats">
@@ -344,11 +345,15 @@ export function RecognitionPage() {
         </div>
       </section>
 
-      {dialogOpen && <UploadDialog onClose={() => setDialogOpen(false)} onCreated={(upload) => {
-        setUploads((current) => current ? [upload, ...current] : [upload])
-        setSelectedId(upload.id)
-        void load()
-      }} />}
+      {dialogOpen && (isStaticData ? (
+        <LocalRecognitionDialog onClose={() => setDialogOpen(false)} />
+      ) : (
+        <UploadDialog onClose={() => setDialogOpen(false)} onCreated={(upload) => {
+          setUploads((current) => current ? [upload, ...current] : [upload])
+          setSelectedId(upload.id)
+          void load()
+        }} />
+      ))}
     </>
   )
 }

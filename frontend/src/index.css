@@ -943,6 +943,11 @@ h2 {
   box-shadow: var(--shadow-pop);
 }
 
+.modal--wide {
+  width: min(100%, 1080px);
+  max-height: min(94vh, 920px);
+}
+
 .modal__title {
   margin: 0 0 17px;
   font-size: 17px;
@@ -1279,6 +1284,116 @@ h2 {
   gap: 10px;
 }
 
+.local-recognition {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.local-recognition__toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.local-recognition__threshold {
+  width: 118px;
+}
+
+.local-recognition__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.local-recognition__frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #102f32;
+}
+
+.local-recognition__frame > img,
+.local-recognition__frame > video {
+  display: block;
+  width: 100%;
+  max-height: min(58vh, 640px);
+  height: auto;
+  background: #102f32;
+}
+
+.local-recognition__box {
+  position: absolute;
+  display: block;
+  border: 2px solid #59d8a3;
+  box-shadow: 0 0 0 1px rgba(10, 51, 49, 0.48);
+  pointer-events: none;
+}
+
+.local-recognition__box i {
+  position: absolute;
+  top: -20px;
+  left: -2px;
+  min-width: 20px;
+  padding: 2px 5px;
+  color: #062d29;
+  background: #59d8a3;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 720;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.local-recognition__metrics {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.local-recognition__metrics div {
+  min-height: 78px;
+  padding: 12px;
+  border-right: 1px solid var(--border);
+}
+
+.local-recognition__metrics div:last-child { border-right: 0; }
+
+.local-recognition__metrics dt {
+  margin: 0 0 6px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.local-recognition__metrics dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 740;
+  font-variant-numeric: tabular-nums;
+}
+
+.local-recognition__metrics small {
+  margin-left: 3px;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.local-recognition__privacy {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
 .file-input {
   width: 100%;
   padding: 6px 8px;
@@ -1419,8 +1534,15 @@ h2 {
   .table { min-width: 640px; }
   .modal-overlay { align-items: end; padding: 0; }
   .modal { width: 100%; max-height: 88vh; border-radius: 8px 8px 0 0; }
+  .modal--wide { max-height: 92vh; }
   .modal__actions { flex-direction: column-reverse; }
   .modal__actions .btn { width: 100%; }
+  .local-recognition__toolbar { align-items: stretch; flex-direction: column; }
+  .local-recognition__threshold { width: 100%; }
+  .local-recognition__actions { justify-content: stretch; }
+  .local-recognition__actions .btn { flex: 1 1 auto; }
+  .local-recognition__metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .local-recognition__metrics div:nth-child(3n) { border-right: 0; }
   .session-meta { gap: 14px 20px; }
   .capture__metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .recognition-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -1439,6 +1561,9 @@ h2 {
   .recognition-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .recognition-metrics div:nth-child(4n) { border-right: 1px solid var(--border); }
   .recognition-metrics div:nth-child(2n) { border-right: 0; }
+  .local-recognition__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .local-recognition__metrics div:nth-child(3n) { border-right: 1px solid var(--border); }
+  .local-recognition__metrics div:nth-child(2n) { border-right: 0; }
   .recognition-form-grid { grid-template-columns: minmax(0, 1fr); }
   .recognition-item { grid-template-columns: 34px minmax(0, 1fr); }
   .recognition-item__result { grid-column: 2; align-items: flex-start; flex-direction: row; gap: 8px; }

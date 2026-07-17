@@ -5,9 +5,10 @@ interface Props {
   title: string
   onClose: () => void
   children: ReactNode
+  wide?: boolean
 }
 
-export function Modal({ title, onClose, children }: Props) {
+export function Modal({ title, onClose, children, wide = false }: Props) {
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose()
@@ -23,7 +24,7 @@ export function Modal({ title, onClose, children }: Props) {
         if (e.target === e.currentTarget) onClose()
       }}
     >
-      <div className="modal" role="dialog" aria-modal="true">
+      <div className={`modal${wide ? ' modal--wide' : ''}`} role="dialog" aria-modal="true">
         <h3 className="modal__title">{title}</h3>
         {children}
       </div>
