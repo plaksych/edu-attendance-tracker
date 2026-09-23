@@ -3,12 +3,19 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from starlette.exceptions import HTTPException
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from pydantic import BaseModel, Field
 
 from app.api.v1 import router as api_v1_router
 from app.core.config import settings
-from app.core.object_storage import ensure_bucket
-from app.services.scheduler import SchedulerThread
+from app.core.object_storage import get_client
+from app.core.database import SessionLocal
+from app.core.http import RequestBoundary, http_error, validation_error
+from app.core import access  # Register object-scope guards.
 
 
 class HealthRead(BaseModel):
@@ -56,7 +63,7 @@ Backend API системы контроля посещаемости.
 Фактический поток данных:
 
 1. Frontend работает с backend через REST API.
-2. Measurement Scheduler внутри backend создаёт занятия на 14 дней вперёд и по два замера
+2. Отдельный Measurement Scheduler создаёт занятия на 14 дней вперёд и по два замера
    на занятие: через 15 минут после начала и за 15 минут до конца.
 3. Для каждого замера создаются задания записи по камерам аудитории; Capture Manager
    забирает их из PostgreSQL, пишет ролики с RTSP и загружает их в MinIO.
@@ -76,18 +83,7 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        ensure_bucket()
-    except Exception:
-        logger.exception("Не удалось инициализировать бакет MinIO — медиа будут недоступны")
-
-    scheduler = SchedulerThread() if settings.scheduler_enabled else None
-    if scheduler is not None:
-        scheduler.start()
     yield
-    if scheduler is not None:
-        scheduler.stop()
-        scheduler.join(timeout=settings.scheduler_interval_seconds + 5)
 
 
 app = FastAPI(
@@ -105,7 +101,12 @@ app.add_middleware(
     allow_origins=settings.cors_origins_list,
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts.split(","))
+app.add_middleware(RequestBoundary)
+app.add_exception_handler(HTTPException, http_error)
+app.add_exception_handler(RequestValidationError, validation_error)
 
 app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
 
@@ -119,3 +120,17 @@ app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
 )
 def health() -> HealthRead:
     return HealthRead(status="ok")
+
+
+@app.get("/health/ready", tags=["Служебное"])
+def ready():
+    try:
+        with SessionLocal() as db:
+            revision = db.scalar(text("SELECT version_num FROM alembic_version"))
+            if revision != "0009":
+                raise RuntimeError("Database migration required")
+        if not get_client().bucket_exists(settings.minio_bucket):
+            raise RuntimeError("Storage not provisioned")
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "unavailable"})
+    return {"status": "ready"}

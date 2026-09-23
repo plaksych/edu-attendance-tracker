@@ -8,12 +8,15 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    JSON,
     SmallInteger,
     String,
     Text,
+    UniqueConstraint,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.core.database import Base
 from app.models.enums import RecognitionMediaType, RecognitionStatus
@@ -23,8 +26,13 @@ class RecognitionUpload(Base):
     """Входной файл для распознавания без камеры и расписания."""
 
     __tablename__ = "recognition_uploads"
+    __table_args__ = (UniqueConstraint("measurement_id", name="uq_upload_measurement"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    session_id: Mapped[int | None] = mapped_column(ForeignKey("sessions.id", ondelete="RESTRICT"), index=True)
+    measurement_id: Mapped[int | None] = mapped_column(ForeignKey("measurements.id", ondelete="RESTRICT"))
+    content_sha256: Mapped[str | None] = mapped_column(String(64))
     filename: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[RecognitionMediaType] = mapped_column(
         Enum(RecognitionMediaType, name="recognition_media_type")
@@ -39,9 +47,13 @@ class RecognitionUpload(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    job: Mapped["RecognitionJob | None"] = relationship(
-        back_populates="upload", uselist=False, cascade="all, delete-orphan"
+    jobs: Mapped[list["RecognitionJob"]] = relationship(
+        back_populates="upload", cascade="all, delete-orphan", order_by="RecognitionJob.id"
     )
+
+    @property
+    def job(self):
+        return self.jobs[-1] if self.jobs else None
 
 
 class RecognitionJob(Base):
@@ -54,13 +66,14 @@ class RecognitionJob(Base):
         ForeignKey("camera_captures.id", ondelete="CASCADE"), unique=True, nullable=True
     )
     upload_id: Mapped[int | None] = mapped_column(
-        ForeignKey("recognition_uploads.id", ondelete="CASCADE"), unique=True, nullable=True
+        ForeignKey("recognition_uploads.id", ondelete="CASCADE"), nullable=True
     )
     status: Mapped[RecognitionStatus] = mapped_column(
         Enum(RecognitionStatus, name="recognition_status"),
         default=RecognitionStatus.pending,
     )
     worker_id: Mapped[str | None] = mapped_column(String(100))
+    claim_token: Mapped[str | None] = mapped_column(String(36))
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[int] = mapped_column(SmallInteger, default=0)
@@ -89,7 +102,7 @@ class RecognitionJob(Base):
     camera_capture: Mapped["CameraCapture | None"] = relationship(  # noqa: F821
         back_populates="recognition_job"
     )
-    upload: Mapped["RecognitionUpload | None"] = relationship(back_populates="job")
+    upload: Mapped["RecognitionUpload | None"] = relationship(back_populates="jobs")
     result: Mapped["RecognitionResult | None"] = relationship(
         back_populates="job", uselist=False
     )
@@ -105,6 +118,7 @@ class RecognitionResult(Base):
         ForeignKey("recognition_jobs.id", ondelete="CASCADE"), unique=True
     )
     people_count: Mapped[int] = mapped_column(Integer)
+    inference_metadata: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB(), "postgresql"))
     detected_median: Mapped[float] = mapped_column(Float)
     detected_percentile_75: Mapped[float] = mapped_column(Float)
     detected_max: Mapped[int] = mapped_column(Integer)

@@ -13,7 +13,10 @@ from app.models.enums import (
 )
 from app.models.measurement import CameraCapture, Measurement
 from app.models.recognition import RecognitionJob, RecognitionResult, RecognitionUpload
-from app.models.schedule import Schedule, Session, SessionStatus, WeekType
+from app.models.schedule import CalendarException, Schedule, Session, SessionStatus, WeekType
+from app.models.security import AccessGrant, AuditEvent, LoginAttempt, LoginSession, User
+from app.models.requests import IdempotencyRecord, ImportPreview, RecognitionCorrection
+from app.models import physical_schema
 
 __all__ = [
     "AttendanceCalculationStatus",

@@ -62,6 +62,7 @@ class Measurement(Base):
     captures: Mapped[list["CameraCapture"]] = relationship(
         back_populates="measurement", cascade="all, delete-orphan"
     )
+    upload: Mapped["RecognitionUpload | None"] = relationship(uselist=False)
 
 
 class CameraCapture(Base):
@@ -82,6 +83,7 @@ class CameraCapture(Base):
     planned_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     duration_seconds: Mapped[int] = mapped_column(SmallInteger, default=20)
     worker_id: Mapped[str | None] = mapped_column(String(100))
+    claim_token: Mapped[str | None] = mapped_column(String(36))
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     attempts: Mapped[int] = mapped_column(SmallInteger, default=0)
     capture_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

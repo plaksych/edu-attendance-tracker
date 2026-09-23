@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession, selectinload
 
 from app.core.database import get_db
+from app.core.camera_security import protect_camera_url
 from app.models import Camera, CameraCapture, CameraRole, Classroom, ClassroomCamera
 from app.models.enums import CameraAggregationMode
 from app.schemas.cameras import (
@@ -33,7 +34,7 @@ def _camera_read(camera: Camera) -> CameraRead:
     return CameraRead(
         id=camera.id,
         name=camera.name,
-        rtsp_url=_mask_credentials(camera.rtsp_url),
+        rtsp_url="",
         capture_group=camera.capture_group,
         enabled=camera.enabled,
         classroom_number=classroom_number,
@@ -67,7 +68,9 @@ def list_cameras(db: DbSession = Depends(get_db)):
     responses={409: {"description": "Камера с таким именем уже существует"}},
 )
 def create_camera(payload: CameraCreate, db: DbSession = Depends(get_db)):
-    camera = Camera(**payload.model_dump())
+    values = payload.model_dump()
+    values["rtsp_url"] = protect_camera_url(values["rtsp_url"])
+    camera = Camera(**values)
     db.add(camera)
     try:
         db.commit()
@@ -91,6 +94,8 @@ def update_camera(camera_id: int, payload: CameraUpdate, db: DbSession = Depends
     if camera is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Камера не найдена")
     for field, value in payload.model_dump(exclude_unset=True, exclude_none=True).items():
+        if field == "rtsp_url":
+            value = protect_camera_url(value)
         setattr(camera, field, value)
     try:
         db.commit()
@@ -178,6 +183,10 @@ def assign_classroom_cameras(
                 status.HTTP_422_UNPROCESSABLE_ENTITY,
                 "Для режима primary_backup нужна ровно одна камера с ролью primary",
             )
+    if classroom.aggregation_mode == CameraAggregationMode.sum:
+        zones = [item.zone_code for item in payload]
+        if any(not zone for zone in zones) or len(set(zones)) != len(zones):
+            raise HTTPException(422, "Для суммирования нужны разные непересекающиеся зоны камер")
 
     for camera_id in camera_ids:
         if db.get(Camera, camera_id) is None:

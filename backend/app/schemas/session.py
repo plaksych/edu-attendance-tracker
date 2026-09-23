@@ -20,6 +20,7 @@ class RecognitionResultRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     people_count: int = Field(description="Итоговое количество людей на ролике", examples=[24])
+    inference_metadata: dict | None = None
     detected_median: float = Field(description="Медиана по кадрам", examples=[24.0])
     detected_percentile_75: float = Field(description="75-й перцентиль по кадрам", examples=[25.0])
     detected_max: int = Field(description="Максимум по кадрам", examples=[26])
@@ -83,6 +84,11 @@ class MeasurementRead(BaseModel):
     confidence: float | None = Field(description="Уверенность итога", examples=[0.82])
     aggregation_method: CameraAggregationMode
     error: str | None
+
+    @computed_field
+    @property
+    def provenance(self) -> str:
+        return "server_inference"
 
 
 class MeasurementDetail(MeasurementRead):

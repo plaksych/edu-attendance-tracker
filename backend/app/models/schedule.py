@@ -7,6 +7,7 @@ from sqlalchemy import (
     DateTime,
     Enum,
     ForeignKey,
+    Integer,
     SmallInteger,
     String,
     Time,
@@ -74,6 +75,8 @@ class Session(Base):
     __tablename__ = "sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    expected_count_snapshot: Mapped[int | None] = mapped_column(Integer)
+    aggregation_mode_snapshot: Mapped[str] = mapped_column(String(30), default="single")
     schedule_id: Mapped[int] = mapped_column(ForeignKey("schedule.id", ondelete="RESTRICT"))
     date: Mapped[date] = mapped_column(Date, index=True)
     status: Mapped[SessionStatus] = mapped_column(
@@ -98,3 +101,12 @@ class Session(Base):
     attendance: Mapped[Optional["AttendanceRecord"]] = relationship(  # noqa: F821
         back_populates="session", cascade="all, delete-orphan", uselist=False
     )
+
+
+class CalendarException(Base):
+    __tablename__ = "calendar_exceptions"
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    teaching: Mapped[bool] = mapped_column(default=False)
+    weekday: Mapped[int | None] = mapped_column(SmallInteger)
+    week_type: Mapped[str | None] = mapped_column(String(10))
+    reason: Mapped[str] = mapped_column(String(300))

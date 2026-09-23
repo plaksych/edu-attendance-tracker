@@ -10,6 +10,7 @@ from functools import lru_cache
 from minio import Minio
 from minio.commonconfig import ENABLED, Filter
 from minio.lifecycleconfig import Expiration, LifecycleConfig, Rule
+from urllib3 import PoolManager, Timeout, Retry
 
 from app.core.config import settings
 
@@ -27,6 +28,8 @@ def get_client() -> Minio:
         access_key=settings.minio_access_key,
         secret_key=settings.minio_secret_key,
         secure=settings.minio_secure,
+        region="us-east-1",
+        http_client=PoolManager(timeout=Timeout(connect=3, read=15), retries=Retry(total=2, backoff_factor=0.5)),
     )
 
 
@@ -39,7 +42,8 @@ def get_presign_client() -> Minio:
         endpoint,
         access_key=settings.minio_access_key,
         secret_key=settings.minio_secret_key,
-        secure=settings.minio_secure,
+        secure=settings.minio_public_secure,
+        region="us-east-1",
     )
 
 

@@ -26,6 +26,7 @@ from app.models import (
     MeasurementStatus,
     RecognitionJob,
     RecognitionResult,
+    RecognitionUpload,
     RecognitionStatus,
     Schedule,
     Session,
@@ -143,6 +144,22 @@ def aggregate_ready_measurements(db: DbSession) -> int:
     for m in measurements:
         captures = m.captures
         if not captures:
+            upload = m.upload
+            job = upload.job if upload else None
+            if job and job.status == RecognitionStatus.completed and job.result:
+                m.final_people_count = job.result.people_count
+                m.confidence = job.result.average_confidence
+                m.status = MeasurementStatus.completed
+                m.completed_at = now
+                m.error = None
+                closed += 1
+            elif job and job.status in JOB_TERMINAL:
+                m.status = MeasurementStatus.failed
+                m.completed_at = now
+                m.error = "Материал не обработан"
+                closed += 1
+            elif job:
+                m.status = MeasurementStatus.recognizing
             continue
 
         captures_terminal = all(c.status in CAPTURE_TERMINAL for c in captures)
@@ -192,7 +209,7 @@ def aggregate_ready_measurements(db: DbSession) -> int:
             continue
 
         roles = _camera_roles(db, m)
-        mode = m.session.schedule.classroom.aggregation_mode if m.session.schedule.classroom else CameraAggregationMode.single
+        mode = CameraAggregationMode(m.session.aggregation_mode_snapshot)
         final_count, confidence = _pick_final(mode, results, roles)
 
         m.final_people_count = final_count
@@ -253,11 +270,11 @@ def finalize_finished_sessions(db: DbSession) -> int:
         else:
             status = AttendanceCalculationStatus.failed
 
-        expected = session.schedule.group.students_count
+        expected = session.expected_count_snapshot if session.expected_count_snapshot is not None else 0
         detected_average = round(mean(values), 2) if values else None
         rate = None
         if detected_average is not None and expected > 0:
-            rate = round(min(detected_average / expected, 1.0), 4)
+            rate = round(detected_average / expected, 4)
 
         db.add(
             AttendanceRecord(

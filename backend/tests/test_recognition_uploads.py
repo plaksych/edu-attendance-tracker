@@ -1,5 +1,8 @@
 from io import BytesIO
 import unittest
+from unittest.mock import patch
+from types import SimpleNamespace
+from PIL import Image
 
 from starlette.datastructures import Headers, UploadFile
 
@@ -17,19 +20,27 @@ def upload(filename: str, content_type: str, body: bytes = b"data") -> UploadFil
 
 class RecognitionUploadValidationTests(unittest.TestCase):
     def test_accepts_image_by_extension_and_content_type(self) -> None:
-        descriptor = describe_upload(upload("auditorium.png", "image/png", b"image"))
+        stream = BytesIO()
+        Image.new("RGB", (8, 8)).save(stream, "PNG")
+        body = stream.getvalue()
+        descriptor = describe_upload(upload("auditorium.png", "image/png", body))
 
         self.assertEqual(descriptor.media_type, RecognitionMediaType.image)
         self.assertEqual(descriptor.content_type, "image/png")
-        self.assertEqual(descriptor.size_bytes, 5)
+        self.assertEqual(descriptor.size_bytes, len(body))
 
     def test_accepts_video_when_browser_uses_generic_content_type(self) -> None:
-        descriptor = describe_upload(
-            upload("lesson.mp4", "application/octet-stream", b"video")
-        )
+        probe = SimpleNamespace(stdout=b'{"streams":[{"width":320,"height":240}],"format":{"duration":"1"}}')
+        with patch("app.services.file_validation.subprocess.run", return_value=probe):
+            descriptor = describe_upload(upload("lesson.mp4", "application/octet-stream", b"0000ftypisom0000"))
 
         self.assertEqual(descriptor.media_type, RecognitionMediaType.video)
         self.assertEqual(descriptor.content_type, "video/mp4")
+
+    def test_rejects_fake_image_and_video(self):
+        for name, kind in (("fake.png", "image/png"), ("fake.mp4", "video/mp4")):
+            with self.assertRaises(RecognitionUploadError):
+                describe_upload(upload(name, kind, b"not real media"))
 
     def test_rejects_mismatched_file_type(self) -> None:
         with self.assertRaisesRegex(

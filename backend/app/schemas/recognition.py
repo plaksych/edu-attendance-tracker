@@ -30,6 +30,9 @@ class RecognitionUploadRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
+    session_id: int | None = None
+    measurement_id: int | None = None
+    provenance: str = "server_inference"
     filename: str
     media_type: RecognitionMediaType
     content_type: str

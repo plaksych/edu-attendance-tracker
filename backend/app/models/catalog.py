@@ -9,7 +9,7 @@ class Group(Base):
     __tablename__ = "groups"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(50), unique=True)
     course: Mapped[int] = mapped_column(Integer, default=1)
     faculty: Mapped[str | None] = mapped_column(String(200))
     # Численность группы; используется как expected_count при расчёте посещаемости
@@ -35,7 +35,7 @@ class Discipline(Base):
     __tablename__ = "disciplines"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(300), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(300), unique=True)
 
     schedule_items: Mapped[list["Schedule"]] = relationship(back_populates="discipline")  # noqa: F821
 
@@ -44,7 +44,7 @@ class Classroom(Base):
     __tablename__ = "classrooms"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    number: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    number: Mapped[str] = mapped_column(String(50), unique=True)
     capacity: Mapped[int | None] = mapped_column(Integer)
     aggregation_mode: Mapped[CameraAggregationMode] = mapped_column(
         Enum(CameraAggregationMode, name="camera_aggregation_mode"),

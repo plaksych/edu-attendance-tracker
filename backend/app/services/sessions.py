@@ -2,10 +2,13 @@ from datetime import date, datetime, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.orm import joinedload
 
 from app.models import (
+    CalendarException,
     CameraCapture,
     CaptureStatus,
     Measurement,
@@ -18,6 +21,7 @@ from app.models import (
     WeekType,
 )
 from app.services.weeks import week_type_for_date
+from app.core.config import settings
 
 
 def _base_query():
@@ -37,8 +41,15 @@ def ensure_sessions_for_date(db: DbSession, target_date: date) -> None:
     Учитывает чередование недель: берутся пары «каждую неделю»
     плюс пары белой или зелёной недели — по чётности недели даты.
     """
-    weekday = target_date.isoweekday()
+    if target_date < settings.semester_start or (settings.semester_end and target_date > settings.semester_end):
+        return
+    exception = db.get(CalendarException, target_date)
+    if exception and not exception.teaching:
+        return
+    weekday = exception.weekday if exception and exception.weekday else target_date.isoweekday()
     week = week_type_for_date(target_date)
+    if exception and exception.week_type:
+        week = WeekType(exception.week_type)
     schedule_ids = set(
         db.scalars(
             select(Schedule.id).where(
@@ -53,12 +64,17 @@ def ensure_sessions_for_date(db: DbSession, target_date: date) -> None:
     missing = schedule_ids - existing
     if not missing:
         return
-    db.add_all(Session(schedule_id=sid, date=target_date) for sid in missing)
+    insert = pg_insert if db.bind.dialect.name == "postgresql" else sqlite_insert
+    schedules = db.scalars(select(Schedule).where(Schedule.id.in_(missing))).all()
+    for schedule in schedules:
+        db.execute(insert(Session).values(schedule_id=schedule.id, date=target_date,
+            expected_count_snapshot=schedule.group.students_count,
+            aggregation_mode_snapshot=(schedule.classroom.aggregation_mode.value if schedule.classroom else "single"))
+            .on_conflict_do_nothing(index_elements=["schedule_id", "date"]))
     db.commit()
 
 
 def list_sessions_for_date(db: DbSession, target_date: date) -> list[Session]:
-    ensure_sessions_for_date(db, target_date)
     sessions = (
         db.scalars(_base_query().where(Session.date == target_date)).unique().all()
     )
@@ -107,6 +123,8 @@ def cancel_session(db: DbSession, session_id: int) -> Session:
                 CaptureStatus.pending,
                 CaptureStatus.retry_wait,
                 CaptureStatus.claimed,
+                CaptureStatus.recording,
+                CaptureStatus.uploading,
             ):
                 capture.status = CaptureStatus.cancelled
                 capture.updated_at = now
@@ -114,6 +132,7 @@ def cancel_session(db: DbSession, session_id: int) -> Session:
             if job is not None and job.status in (
                 RecognitionStatus.pending,
                 RecognitionStatus.retry_wait,
+                RecognitionStatus.processing,
             ):
                 job.status = RecognitionStatus.cancelled
                 job.updated_at = now
