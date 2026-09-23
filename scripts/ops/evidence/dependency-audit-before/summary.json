@@ -2,6 +2,7 @@
   "scanner": "pip-audit==2.9.0 / npm audit",
   "time": "2026-09-23T19:24:09.089606+00:00",
   "scope": "locked packages; no application exploitability determination",
+  "representation": "Python reports omit upstream advisory prose. Package versions, advisory IDs, aliases, fix versions and coverage gaps are preserved. Full advisories are available at https://osv.dev/vulnerability/{id}.",
   "checks": {
     "backend": {
       "exit_code": 1,

@@ -264,7 +264,6 @@ tmp/
 
 # Системные файлы
 .DS_Store
-.claude/
 *.docx
 artifacts/
 frontend/test-results/
