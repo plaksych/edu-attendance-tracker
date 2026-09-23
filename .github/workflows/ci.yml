@@ -178,6 +178,7 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {persist-credentials: false}
       - name: Build commit-tagged candidate; no registry login or push
+        id: image
         run: docker build -f '${{ matrix.dockerfile }}' -t 'attendance-${{ matrix.service }}:${{ github.sha }}' '${{ matrix.context }}'
       - name: Verify actual Nginx runtime assets on disposable runner
         if: matrix.service == 'frontend'
@@ -188,6 +189,7 @@ jobs:
           curl --fail --retry 10 --retry-connrefused --retry-delay 1 "http://127.0.0.1:${port}/" > /dev/null
           python3 scripts/check_static_http.py "http://127.0.0.1:${port}"
       - name: Install checksum-pinned security scanner
+        id: scanner
         run: |
           python3 scripts/ops/install_trivy.py "$RUNNER_TEMP/trivy-bin"
           echo "$RUNNER_TEMP/trivy-bin" >> "$GITHUB_PATH"
@@ -196,8 +198,12 @@ jobs:
           image-ref: attendance-${{ matrix.service }}:${{ github.sha }}
           severity: HIGH,CRITICAL
           exit-code: '1'
+          format: json
+          output: vulnerabilities.json
           skip-setup-trivy: 'true'
       - name: Inventory licenses
+        id: licenses
+        if: ${{ !cancelled() && steps.image.outcome == 'success' && steps.scanner.outcome == 'success' }}
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
         with:
           image-ref: attendance-${{ matrix.service }}:${{ github.sha }}
@@ -206,12 +212,25 @@ jobs:
           output: licenses.json
           skip-setup-trivy: 'true'
       - run: python3 scripts/check_licenses.py licenses.json
+        if: ${{ !cancelled() && steps.licenses.outcome == 'success' }}
       - uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
+        if: ${{ !cancelled() && steps.image.outcome == 'success' && steps.scanner.outcome == 'success' }}
         with:
           image-ref: attendance-${{ matrix.service }}:${{ github.sha }}
           format: cyclonedx
           output: container-sbom.cdx.json
           skip-setup-trivy: 'true'
+      - name: Preserve inspection reports even when release is blocked
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: container-inspection-${{ matrix.service }}-${{ github.sha }}
+          path: |
+            vulnerabilities.json
+            licenses.json
+            container-sbom.cdx.json
+          if-no-files-found: warn
+          retention-days: 14
       - name: Save the tested bytes, never rebuild during deployment
         run: |
           docker save 'attendance-${{ matrix.service }}:${{ github.sha }}' | gzip > image.tar.gz
