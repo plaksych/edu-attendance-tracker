@@ -19,8 +19,9 @@ class Settings(BaseSettings):
     session_secure: bool = True
     session_ttl_seconds: int = 28800
     trusted_hosts: str = "localhost,127.0.0.1,testserver"
-    login_limit: int = 8
-    login_window_seconds: int = 900
+    login_limit: int = Field(default=8, ge=1, le=100)
+    login_peer_limit: int = Field(default=1000, ge=1, le=10000)
+    login_window_seconds: int = Field(default=900, ge=60, le=86400)
     camera_encryption_key: str = ""
     camera_allowed_cidrs: str = ""
 

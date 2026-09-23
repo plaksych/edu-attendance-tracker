@@ -244,3 +244,40 @@ def test_request_size_before_parser_and_safe_validation_error(world):
     assert response.status_code == 422
     assert PASSWORD not in response.text
     assert response.json()["error"]["request_id"]
+
+
+def test_login_account_budget_does_not_lock_other_users_behind_proxy(
+    world, monkeypatch
+):
+    from app.core.config import settings
+
+    client, _ = world
+    monkeypatch.setattr(settings, "login_limit", 2)
+    monkeypatch.setattr(settings, "login_peer_limit", 10)
+    for _ in range(2):
+        login(client, "teacher")
+    response = client.post(
+        "/api/v1/auth/login", json={"username": "teacher", "password": PASSWORD}
+    )
+    assert response.status_code == 429
+    assert response.headers["retry-after"] == str(settings.login_window_seconds)
+    login(client, "operator")
+
+
+def test_login_peer_budget_cannot_be_bypassed_with_forwarded_headers(
+    world, monkeypatch
+):
+    from app.core.config import settings
+
+    client, _ = world
+    monkeypatch.setattr(settings, "login_peer_limit", 2)
+    for number in range(3):
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"username": f"missing-{number}", "password": PASSWORD},
+            headers={
+                "X-Forwarded-For": f"192.0.2.{number + 1}",
+                "X-Real-IP": f"192.0.2.{number + 1}",
+            },
+        )
+        assert response.status_code == (401 if number < 2 else 429)

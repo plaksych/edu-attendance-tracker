@@ -96,7 +96,7 @@ def user_read(user):
     }
 
 
-def throttle(db, key):
+def throttle(db, key, limit):
     now = datetime.now(timezone.utc)
     insert = pg_insert if db.bind.dialect.name == "postgresql" else sqlite_insert
     db.execute(
@@ -112,7 +112,7 @@ def throttle(db, key):
     ):
         entry.window_start, entry.attempts = now, 0
     entry.attempts += 1
-    exceeded = entry.attempts > settings.login_limit
+    exceeded = entry.attempts > limit
     db.commit()
     if exceeded:
         raise HTTPException(
@@ -137,9 +137,13 @@ def login(
         and origin != str(request.base_url).rstrip("/")
     ):
         raise HTTPException(403, "Источник запроса не разрешён")
-    throttle(db, token_hash("account:" + payload.username.lower()))
     throttle(
-        db, token_hash("peer:" + (request.client.host if request.client else "unknown"))
+        db, token_hash("account:" + payload.username.lower()), settings.login_limit
+    )
+    throttle(
+        db,
+        token_hash("peer:" + (request.client.host if request.client else "unknown")),
+        settings.login_peer_limit,
     )
     user = db.scalar(select(User).where(User.username == payload.username.lower()))
     valid = verify_password(

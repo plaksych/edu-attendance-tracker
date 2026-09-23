@@ -175,6 +175,14 @@ jobs:
         with: {persist-credentials: false}
       - name: Build commit-tagged candidate; no registry login or push
         run: docker build -f '${{ matrix.dockerfile }}' -t 'attendance-${{ matrix.service }}:${{ github.sha }}' '${{ matrix.context }}'
+      - name: Verify actual Nginx runtime assets on disposable runner
+        if: matrix.service == 'frontend'
+        run: |
+          container=$(docker run -d --rm --add-host backend:127.0.0.1 -p 127.0.0.1::8080 attendance-frontend:${{ github.sha }})
+          trap 'docker rm -f "$container"' EXIT
+          port=$(docker port "$container" 8080 | cut -d: -f2)
+          curl --fail --retry 10 --retry-connrefused --retry-delay 1 "http://127.0.0.1:${port}/" > /dev/null
+          python3 scripts/check_static_http.py "http://127.0.0.1:${port}"
       - uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
         with:
           image-ref: attendance-${{ matrix.service }}:${{ github.sha }}

@@ -19,6 +19,29 @@ from tasks import python as service_python  # noqa: E402
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_frontend_runtime_assets_do_not_fall_back_to_spa(self):
+        import re
+
+        config = (SCRIPTS.parent / "frontend/nginx.conf").read_text()
+        for folder in ("ort", "models"):
+            start = config.index(f"location ^~ /{folder}/")
+            following = config.find("\n    location ", start + 1)
+            block = config[start : following if following != -1 else len(config)]
+            self.assertIn("try_files $uri =404;", block)
+            self.assertNotIn("/index.html", block)
+        self.assertRegex(config, re.compile(r"application/javascript\s+js\s+mjs;"))
+        self.assertIn("application/wasm wasm;", config)
+
+    def test_gateway_limits_login_at_real_peer_without_trusting_forwarded_headers(self):
+        config = (SCRIPTS / "ops/gateway.conf.template").read_text()
+        self.assertIn(
+            "limit_req_zone $binary_remote_addr zone=login:10m rate=10r/m;", config
+        )
+        self.assertIn("location = /api/v1/auth/login", config)
+        self.assertIn("limit_req zone=login burst=5 nodelay;", config)
+        self.assertIn("limit_req_status 429;", config)
+        self.assertNotIn("real_ip_header", config)
+
     def test_python_override_preserves_venv_launcher_symlink(self):
         with tempfile.TemporaryDirectory() as folder:
             launcher = Path(folder) / "python"
