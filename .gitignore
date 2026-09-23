@@ -249,7 +249,9 @@ media/
 *.mov
 *.zip
 output/
-docs/
+docs/report-assets/
+docs/recognition-architecture-summary.md
+docs/50-camera-batch-architecture.md
 tmp/
 
 # Локальные таблицы и выгрузки
@@ -260,3 +262,8 @@ tmp/
 
 # Системные файлы
 .DS_Store
+.claude/
+*.docx
+artifacts/
+.env.*
+!.env.example
