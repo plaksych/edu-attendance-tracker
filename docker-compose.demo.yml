@@ -1,0 +1,8 @@
+# Project/database/bucket isolation is enforced by scripts/ops/manage.py.
+services:
+  backend:
+    environment: {ENVIRONMENT: demo}
+  scheduler:
+    environment: {ENVIRONMENT: demo}
+  maintenance:
+    environment: {ENVIRONMENT: demo}

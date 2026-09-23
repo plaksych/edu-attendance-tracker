@@ -1,0 +1,3 @@
+# Advisory-only comparison for Linux +cpu builds; does not install or replace them.
+torch==2.7.0
+torchvision==0.22.0
