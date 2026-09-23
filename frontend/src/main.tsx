@@ -4,20 +4,21 @@ import { BrowserRouter, HashRouter } from 'react-router-dom'
 import App from './App'
 import { isStaticData } from './api/client'
 import './index.css'
+import '@fontsource-variable/golos-text'
+import '@fontsource-variable/onest'
+import './production.css'
 
 const basename =
   import.meta.env.BASE_URL === '/'
     ? undefined
     : import.meta.env.BASE_URL.replace(/\/$/, '')
 
-const future = { v7_startTransition: true, v7_relativeSplatPath: true }
-
 const application = isStaticData ? (
-  <HashRouter future={future}>
+  <HashRouter>
     <App />
   </HashRouter>
 ) : (
-  <BrowserRouter basename={basename} future={future}>
+  <BrowserRouter basename={basename}>
     <App />
   </BrowserRouter>
 )

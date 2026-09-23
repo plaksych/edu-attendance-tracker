@@ -1,4 +1,5 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { FormEvent, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api, isStaticData } from '../api/client'
 import type {
   RecognitionEvaluationSummary,
@@ -7,7 +8,11 @@ import type {
   RecognitionUploadMedia,
 } from '../api/types'
 import { IconImage, IconRecognition, IconRefresh, IconUpload, IconVideo } from '../components/icons'
-import { LocalRecognitionDialog } from '../components/LocalRecognitionDialog'
+import { ProvenanceBadge } from '../components/Provenance'
+import { RecognitionHistory } from '../components/RecognitionHistory'
+import { managementApi, type Capabilities } from '../api/management'
+import type { SessionDetail } from '../api/types'
+const LocalRecognitionDialog = lazy(() => import('../components/LocalRecognitionDialog').then(m => ({ default: m.LocalRecognitionDialog })))
 import { Modal } from '../components/Modal'
 import { StatCard } from '../components/StatCard'
 import { fmtBytes, fmtClock } from '../lib/format'
@@ -32,41 +37,6 @@ const STATUS_TONE: Record<RecognitionStatus, string> = {
   cancelled: 'gray',
 }
 
-type Box = { left: number; top: number; width: number; height: number }
-
-const DEMO_BOXES: Record<number, Box[]> = {
-  104: [
-    { left: 6, top: 36, width: 13, height: 33 },
-    { left: 15, top: 28, width: 10, height: 22 },
-    { left: 38, top: 29, width: 8, height: 22 },
-    { left: 45, top: 33, width: 10, height: 30 },
-    { left: 39, top: 44, width: 14, height: 45 },
-    { left: 63, top: 27, width: 9, height: 24 },
-    { left: 77, top: 34, width: 9, height: 24 },
-    { left: 88, top: 39, width: 11, height: 43 },
-  ],
-  103: [
-    { left: 9, top: 43, width: 9, height: 31 },
-    { left: 19, top: 45, width: 10, height: 39 },
-    { left: 28, top: 40, width: 10, height: 30 },
-    { left: 36, top: 39, width: 8, height: 27 },
-    { left: 48, top: 40, width: 8, height: 25 },
-    { left: 48, top: 48, width: 10, height: 36 },
-    { left: 63, top: 40, width: 9, height: 28 },
-    { left: 72, top: 41, width: 10, height: 31 },
-    { left: 80, top: 41, width: 9, height: 28 },
-    { left: 87, top: 43, width: 9, height: 31 },
-    { left: 72, top: 52, width: 13, height: 42 },
-  ],
-  102: [
-    { left: 8, top: 34, width: 15, height: 33 },
-    { left: 22, top: 42, width: 18, height: 50 },
-    { left: 39, top: 20, width: 10, height: 24 },
-    { left: 52, top: 24, width: 12, height: 36 },
-    { left: 73, top: 22, width: 10, height: 30 },
-    { left: 81, top: 39, width: 15, height: 40 },
-  ],
-}
 
 function Status({ status }: { status: RecognitionStatus }) {
   return <span className={`pill pill--${STATUS_TONE[status]}`}>{STATUS_LABEL[status]}</span>
@@ -77,29 +47,34 @@ function pct(value: number | null): string {
 }
 
 function FramePreview({ upload, media }: { upload: RecognitionUpload; media: RecognitionUploadMedia | null }) {
+  const [annotated, setAnnotated] = useState(true)
+  const [zoom, setZoom] = useState(1)
   const result = upload.job.result
-  const source = media?.annotated_url
+  const source = annotated ? media?.annotated_url : upload.media_type === 'image' ? media?.source_url : null
   if (!source || !result) {
-    return <div className="recognition-frame__empty">Контрольный кадр появится после обработки</div>
+    return <div className="recognition-frame__empty">{media?.annotated_unavailable_reason ?? 'Контрольный кадр пока недоступен'}</div>
   }
-  const boxes = isStaticData ? DEMO_BOXES[upload.id] ?? [] : []
   return (
-    <div className="recognition-frame">
-      <img src={source} alt={`Контрольный кадр: ${upload.label ?? upload.filename}`} />
-      {boxes.map((box, index) => (
-        <span
-          className="recognition-frame__box"
-          key={`${upload.id}-${index}`}
-          style={{ left: `${box.left}%`, top: `${box.top}%`, width: `${box.width}%`, height: `${box.height}%` }}
-        >
-          <i>{index + 1}</i>
-        </span>
-      ))}
-    </div>
+    <><div className="media-controls">
+      {!isStaticData && upload.media_type === 'image' && media?.source_url && <label><input type="checkbox" checked={annotated} onChange={e => setAnnotated(e.target.checked)} /> Разметка</label>}
+      <label>Масштаб <input aria-label="Масштаб кадра" type="range" min="1" max="3" step="0.25" value={zoom} onChange={e => setZoom(Number(e.target.value))} /></label>
+      <button className="btn btn--ghost btn--sm" onClick={() => setZoom(1)}>Сбросить масштаб</button>
+    </div><div className="media-viewport"><div className="recognition-frame" style={{ width: `${zoom * 100}%`, maxWidth: 'none' }}>
+      <img src={source} alt={`${isStaticData ? 'Синтетическая схема, не результат инференса' : 'Контрольный кадр'}: ${upload.label ?? upload.filename}`} />
+    </div></div></>
   )
 }
 
 function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: (upload: RecognitionUpload) => void }) {
+  const [params] = useSearchParams()
+  const [sessionId, setSessionId] = useState(params.get('session_id') ?? '')
+  const [measurementId, setMeasurementId] = useState(params.get('measurement_id') ?? '')
+  const [session, setSession] = useState<SessionDetail | null>(null)
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
+  const [configError, setConfigError] = useState<string | null>(null)
+  const [configRevision, setConfigRevision] = useState(0)
+  const submission = useRef<{ fingerprint: string; key: string } | null>(null)
+  const pending = useRef(false)
   const [file, setFile] = useState<File | null>(null)
   const [label, setLabel] = useState('')
   const [reference, setReference] = useState('')
@@ -108,22 +83,45 @@ function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
+  useEffect(() => {
+    let active = true
+    setConfigError(null)
+    managementApi.capabilities().then(value => { if (active) setCapabilities(value) }).catch(e => { if (active) setConfigError(e.message) })
+    return () => { active = false }
+  }, [configRevision])
+  useEffect(() => {
+    let active = true
+    setSession(null)
+    if (sessionId && Number.isSafeInteger(Number(sessionId)) && Number(sessionId) > 0) api.getSession(Number(sessionId)).then(value => { if (active) setSession(value) }).catch(() => { if (active) setSession(null) })
+    return () => { active = false }
+  }, [sessionId])
+
   const submit = async (event: FormEvent) => {
     event.preventDefault()
+    if (pending.current || !capabilities) return
     if (!file) {
       setError('Выберите видео или изображение')
       return
     }
     const referencePeopleCount = reference === '' ? undefined : Number(reference)
+    if (file.size === 0 || file.size > capabilities.max_size_bytes) { setError(`Допустимый размер: от 1 байта до ${fmtBytes(capabilities.max_size_bytes)}`); return }
+    if (!capabilities.formats.includes(file.name.split('.').pop()?.toLowerCase() ?? '')) { setError('Формат файла не поддерживается'); return }
+    if (sessionId && !session) { setError('Укажите доступное занятие или удалите связь'); return }
     if (referencePeopleCount !== undefined && (!Number.isInteger(referencePeopleCount) || referencePeopleCount < 0)) {
       setError('Эталонное число должно быть целым неотрицательным числом')
       return
     }
     setSaving(true)
+    pending.current = true
     setError(null)
+    const fingerprint = JSON.stringify([file.name, file.size, file.lastModified, label, reference, sampleRate, confidence, sessionId, measurementId])
+    if (submission.current?.fingerprint !== fingerprint) submission.current = { fingerprint, key: crypto.randomUUID() }
     try {
       const upload = await api.uploadRecognition({
         file,
+        idempotency_key: submission.current.key,
+        session_id: sessionId ? Number(sessionId) : undefined,
+        measurement_id: measurementId ? Number(measurementId) : undefined,
         label: label.trim() || undefined,
         reference_people_count: referencePeopleCount,
         sample_rate_fps: Number(sampleRate),
@@ -135,23 +133,30 @@ function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
       setError((requestError as Error).message)
     } finally {
       setSaving(false)
+      pending.current = false
     }
   }
 
   return (
-    <Modal title="Новый материал" onClose={onClose}>
+    <Modal title="Новый материал" onClose={() => { if (!pending.current) onClose() }}>
       <form className="modal__form" onSubmit={submit}>
+        {configError && <div role="alert" className="alert alert--error">{configError}<button type="button" className="btn btn--ghost" onClick={() => setConfigRevision(n => n + 1)}>Повторить</button></div>}
+        {!capabilities && !configError && <p role="status">Получение допустимых форматов и лимитов…</p>}
+        {capabilities && <p className="metric-note">До {fmtBytes(capabilities.max_size_bytes)} · видео до {capabilities.max_duration_seconds} с · до {capabilities.max_video_dimension} px по стороне · до {capabilities.max_pixels.toLocaleString('ru-RU')} пикселей. Форматы: {capabilities.formats.join(', ')}.</p>}
         <div className="field">
           <label htmlFor="recognition-file">Видео или изображение</label>
           <input
             id="recognition-file"
             className="input file-input"
             type="file"
-            accept="video/mp4,video/quicktime,video/x-msvideo,video/webm,image/jpeg,image/png,image/webp"
-            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+            disabled={!capabilities || saving}
+            accept={capabilities?.formats.map(format => `.${format}`).join(',')}
+            onChange={(event) => { setFile(event.target.files?.[0] ?? null); submission.current = null }}
           />
           {file && <span className="field__hint">{file.name} · {fmtBytes(file.size)}</span>}
         </div>
+        <label className="field">Номер занятия (необязательно)<input className="input" type="number" min="1" step="1" value={sessionId} disabled={saving} onChange={e => { setSessionId(e.target.value); setMeasurementId('') }} /></label>
+        {session && <><p>{session.schedule.group.name} · {session.schedule.discipline.name} · {session.date}</p><label className="field">Замер<select className="select" value={measurementId} onChange={e => setMeasurementId(e.target.value)}><option value="">Без указания замера</option>{session.measurements.map(m => <option key={m.id} value={m.id}>{m.type === 'after_start' ? 'Первый замер' : 'Второй замер'}</option>)}</select></label></>}
         <div className="field">
           <label htmlFor="recognition-label">Название материала</label>
           <input id="recognition-label" className="input" value={label} onChange={(event) => setLabel(event.target.value)} maxLength={160} />
@@ -163,17 +168,17 @@ function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
           </div>
           <div className="field">
             <label htmlFor="recognition-rate">Выборка, кадр/с</label>
-            <input id="recognition-rate" className="input" type="number" min="0.1" max="10" step="0.1" value={sampleRate} onChange={(event) => setSampleRate(event.target.value)} />
+            <input id="recognition-rate" className="input" required type="number" min={capabilities?.sample_rate_fps.min} max={capabilities?.sample_rate_fps.max} step="0.1" value={sampleRate} onChange={(event) => setSampleRate(event.target.value)} />
           </div>
           <div className="field">
             <label htmlFor="recognition-confidence">Порог</label>
-            <input id="recognition-confidence" className="input" type="number" min="0.05" max="0.95" step="0.05" value={confidence} onChange={(event) => setConfidence(event.target.value)} />
+            <input id="recognition-confidence" className="input" required type="number" min={capabilities?.confidence.min} max={capabilities?.confidence.max} step="0.01" value={confidence} onChange={(event) => setConfidence(event.target.value)} />
           </div>
         </div>
         {error && <div className="alert alert--error">{error}</div>}
         <div className="modal__actions">
-          <button type="button" className="btn btn--ghost" onClick={onClose}>Отмена</button>
-          <button className="btn" disabled={saving}>{saving ? 'Создание…' : 'Отправить'}</button>
+          <button type="button" className="btn btn--ghost" disabled={saving} onClick={onClose}>Отмена</button>
+          <button className="btn" disabled={saving || !capabilities}>{saving ? 'Отправка…' : 'Отправить'}</button>
         </div>
       </form>
     </Modal>
@@ -181,13 +186,16 @@ function UploadDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
 }
 
 export function RecognitionPage() {
+  const [params] = useSearchParams()
   const [uploads, setUploads] = useState<RecognitionUpload[] | null>(null)
   const [summary, setSummary] = useState<RecognitionEvaluationSummary | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [media, setMedia] = useState<RecognitionUploadMedia | null>(null)
   const [loadingMedia, setLoadingMedia] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [dialogOpen, setDialogOpen] = useState(false)
+  const [dialogOpen, setDialogOpen] = useState(params.has('session_id'))
+  const [retrying, setRetrying] = useState(false)
+  const retryKeys = useRef(new Map<number, string>())
 
   const load = useCallback(async () => {
     try {
@@ -216,11 +224,14 @@ export function RecognitionPage() {
       return
     }
     setLoadingMedia(true)
+    setMedia(null)
+    let active = true
     api.getRecognitionUploadMedia(selected.id)
-      .then(setMedia)
-      .catch(() => setMedia(null))
-      .finally(() => setLoadingMedia(false))
-  }, [selected?.id])
+      .then(value => { if (active) setMedia(value) })
+      .catch(() => { if (active) setMedia(null) })
+      .finally(() => { if (active) setLoadingMedia(false) })
+    return () => { active = false }
+  }, [selected?.id, selected?.job.status, selected?.job.id])
 
   useEffect(() => {
     if (!uploads?.some((item) => ACTIVE_STATUSES.has(item.job.status))) return
@@ -232,8 +243,9 @@ export function RecognitionPage() {
     () => uploads?.filter((item) => item.job.status === 'completed') ?? [],
     [uploads],
   )
-  const meanConfidence = completed.length
-    ? completed.reduce((sum, item) => sum + (item.job.result?.average_confidence ?? 0), 0) / completed.length
+  const confidences = completed.map(item => item.job.result?.average_confidence).filter((value): value is number => value !== null && value !== undefined)
+  const meanConfidence = confidences.length
+    ? confidences.reduce((sum, value) => sum + value, 0) / confidences.length
     : null
   const toleranceRate = summary && summary.checked_materials > 0
     ? summary.within_tolerance_count / summary.checked_materials
@@ -250,15 +262,15 @@ export function RecognitionPage() {
           <button className="icon-button" type="button" aria-label="Обновить данные" title="Обновить данные" onClick={() => void load()}>
             <IconRefresh />
           </button>
-          <button className="btn" type="button" onClick={() => setDialogOpen(true)}>
+          <button className="btn" type="button" onClick={event => { event.currentTarget.focus(); setDialogOpen(true) }}>
             <IconUpload />
             {isStaticData ? 'Проверить файл' : 'Добавить материал'}
           </button>
         </div>
       </header>
 
-      {isStaticData && <div className="recognition-mode">Публикация: локальная проверка фото и видео, демонстрационный журнал и контрольные кадры.</div>}
-      {error && <div className="alert alert--error">{error}</div>}
+      {isStaticData && <div className="recognition-mode">Учебный пример: синтетическая схема и заранее заданное число, без инференса. Проверка своего файла выполняется отдельно в браузере.</div>}
+      {error && <div className="alert alert--error" role="alert">{error}</div>}
 
       <section className="grid grid--stats recognition-stats">
         <StatCard label="Материалов" value={uploads?.length ?? '—'} hint={`${completed.length} завершено`} icon={<IconRecognition />} tone="teal" />
@@ -317,7 +329,8 @@ export function RecognitionPage() {
                 </div>
                 <Status status={selected.job.status} />
               </div>
-              {loadingMedia ? <div className="loading">Загрузка кадра…</div> : <FramePreview upload={selected} media={media} />}
+              {selected.job.result ? <ProvenanceBadge source={selected.provenance} /> : <span className="provenance">Серверная обработка · результат ещё не получен</span>}
+              {loadingMedia ? <div className="loading">Загрузка кадра…</div> : <FramePreview key={selected.id} upload={selected} media={media} />}
               <div className="recognition-inspector__facts">
                 <span>{selected.media_type === 'video' ? 'Видео' : 'Изображение'} · {fmtBytes(selected.size_bytes)}</span>
                 <span>порог {selected.job.confidence_threshold.toFixed(2)}</span>
@@ -328,7 +341,7 @@ export function RecognitionPage() {
                   <div><dt>Результат</dt><dd>{selected.job.result.people_count}<small>чел.</small></dd></div>
                   <div><dt>Эталон</dt><dd>{selected.reference_people_count ?? '—'}{selected.reference_people_count !== null && <small>чел.</small>}</dd></div>
                   <div><dt>Ошибка</dt><dd>{selected.job.result.absolute_error ?? '—'}{selected.job.result.absolute_error !== null && <small>чел.</small>}</dd></div>
-                  <div><dt>Точность</dt><dd>{selected.job.result.relative_error === null ? '—' : `${Math.round((1 - selected.job.result.relative_error) * 100)}%`}</dd></div>
+                  <div><dt>Относительная ошибка</dt><dd>{pct(selected.job.result.relative_error)}</dd></div>
                   <div><dt>Уверенность</dt><dd>{pct(selected.job.result.average_confidence)}</dd></div>
                   <div><dt>Разброс</dt><dd>{selected.job.result.count_stddev.toFixed(2)}</dd></div>
                   <div><dt>Кадров</dt><dd>{selected.job.result.sampled_frames}<small>из {selected.job.result.source_frames}</small></dd></div>
@@ -336,17 +349,28 @@ export function RecognitionPage() {
                 </dl>
               )}
               {selected.job.error && <div className="capture__error">{selected.job.error}</div>}
+              <p className="metric-note">Уверенность детектора не равна точности подсчёта. Подсчёт не устанавливает личность.</p>
+              {!isStaticData && ['failed', 'completed', 'cancelled'].includes(selected.job.status) && <button className="btn btn--ghost" disabled={retrying} onClick={async () => {
+                if (retrying) return
+                setRetrying(true)
+                const key = retryKeys.current.get(selected.id) ?? crypto.randomUUID()
+                retryKeys.current.set(selected.id, key)
+                try { const next = await managementApi.retry(selected.id, key); setUploads(items => items?.map(item => item.id === next.id ? next : item) ?? [next]); retryKeys.current.delete(selected.id) }
+                catch (e) { setError((e as Error).message) }
+                finally { setRetrying(false) }
+              }}>{retrying ? 'Создание версии…' : 'Повторить обработку'}</button>}
               <div className="recognition-inspector__footer">
                 <span>Создано {fmtClock(selected.created_at)}</span>
                 {selected.media_type === 'video' && media?.source_url && <a href={media.source_url} target="_blank" rel="noopener noreferrer">Открыть видео</a>}
               </div>
+              {!isStaticData && <RecognitionHistory key={selected.id} uploadId={selected.id} jobId={selected.job.id} hasResult={!!selected.job.result} />}
             </>
           ) : <div className="empty">Выберите материал</div>}
         </div>
       </section>
 
       {dialogOpen && (isStaticData ? (
-        <LocalRecognitionDialog onClose={() => setDialogOpen(false)} />
+        <Suspense fallback={<div className="loading" role="status">Подготовка локальной проверки…</div>}><LocalRecognitionDialog onClose={() => setDialogOpen(false)} /></Suspense>
       ) : (
         <UploadDialog onClose={() => setDialogOpen(false)} onCreated={(upload) => {
           setUploads((current) => current ? [upload, ...current] : [upload])

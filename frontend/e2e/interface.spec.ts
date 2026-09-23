@@ -1,0 +1,146 @@
+import { expect, test } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
+
+test('demo routes, dimensions, visual artifacts and no API calls', async ({ page }, info) => {
+  const errors: string[] = []
+  const apiCalls: string[] = []
+  const failedImages: string[] = []
+  page.on('pageerror', e => errors.push(e.message))
+  page.on('request', request => { if (new URL(request.url()).pathname.startsWith('/api/v1/')) apiCalls.push(request.url()) })
+  page.on('response', response => { if (response.request().resourceType() === 'image' && !response.ok()) failedImages.push(response.url()) })
+  for (const width of [320, 360, 390, 768, 1280, 1440, 1920]) {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('http://127.0.0.1:4173/#/')
+    await expect(page.getByRole('heading', { name: 'Обзор', exact: true })).toBeVisible()
+    await expect(page.locator('.stat-card').first()).toBeVisible()
+    await expect(page.getByText('Занятия с полным итогом', { exact: true })).toBeVisible()
+    await expect(page.getByText('Занятия с двумя замерами', { exact: true })).toBeVisible()
+    await page.screenshot({ path: info.outputPath(`overview-${width}.png`), fullPage: true })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  }
+  for (const [route, title] of [['sessions', 'Занятия'], ['schedule', 'Расписание'], ['recognition', 'Распознавание'], ['analytics', 'Аналитика'], ['catalog', 'Справочники'], ['cameras', 'Аудитории и камеры'], ['admin/system', 'Состояние системы']]) {
+    await page.setViewportSize({ width: 1440, height: 900 })
+    await page.goto(`http://127.0.0.1:4173/#/${route}`)
+    await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible()
+    if (route === 'recognition') await expect(page.locator('.recognition-frame img')).toBeVisible()
+    await expect.poll(() => page.locator('img').evaluateAll(images => images.every(image => image.complete && image.naturalWidth > 0))).toBe(true)
+    await page.screenshot({ path: info.outputPath(`${route.replaceAll('/', '-')}-desktop.png`), fullPage: true })
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.screenshot({ path: info.outputPath(`${route.replaceAll('/', '-')}-mobile.png`), fullPage: true })
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  }
+  expect(errors).toEqual([])
+  expect(apiCalls).toEqual([])
+  expect(failedImages).toEqual([])
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto('http://127.0.0.1:4173/#/')
+  await page.getByRole('button', { name: 'Режим показа' }).click()
+  await expect(page.getByRole('button', { name: 'Выйти из показа' })).toBeVisible()
+  await page.screenshot({ path: info.outputPath('presentation-1280x720.png'), fullPage: true })
+})
+
+test('analytics exports filtered fixture data, table alternative and accessible shell', async ({ page }, info) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('http://127.0.0.1:4173/#/analytics')
+  await expect(page.getByRole('button', { name: 'Скачать отчёт' })).toBeEnabled()
+  await page.getByLabel('С даты', { exact: true }).fill('2026-09-21')
+  await expect(page.locator('tbody tr')).toHaveCount(3)
+  const download = page.waitForEvent('download')
+  await page.getByRole('button', { name: 'Скачать отчёт' }).click()
+  expect((await download).suggestedFilename()).toContain('2026-09-21-2026-09-23')
+  const accessibility = await new AxeBuilder({ page }).analyze()
+  expect(accessibility.violations.map(v => `${v.id}: ${v.nodes.map(n => n.target).join(',')}`)).toEqual([])
+  await page.getByLabel('С даты', { exact: true }).fill('2027-01-01')
+  await expect(page.getByRole('alert')).toBeVisible()
+  await page.screenshot({ path: info.outputPath('analytics-empty.png'), fullPage: true })
+})
+
+test('guided presentation preserves fixture context, keyboard access and return filters', async ({ page }, info) => {
+  const original = 'http://127.0.0.1:4173/#/sessions?date=2026-09-23&group=1&status=finished'
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await page.goto(original)
+  const sessionLink = await page.locator('tbody a').first().getAttribute('href')
+  await page.getByRole('button', { name: 'Режим показа' }).click()
+  const controls = page.getByRole('region', { name: 'Навигация показа' })
+  await expect(controls.getByRole('status')).toHaveText('1 / 4 · Обзор')
+  await expect(page.locator('.workspace-source')).toContainText('Учебный пример')
+  await expect(controls.getByRole('button', { name: 'Назад' })).toBeDisabled()
+  await page.screenshot({ path: info.outputPath('presentation-overview.png'), fullPage: true })
+  await controls.getByRole('button', { name: 'Далее' }).focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('heading', { level: 1, name: 'Распознавание' })).toBeVisible()
+  await expect(page.locator('.recognition-frame img')).toBeVisible()
+  await page.screenshot({ path: info.outputPath('presentation-recognition.png'), fullPage: true })
+  await controls.getByRole('button', { name: 'Далее' }).click()
+  await expect(page).toHaveURL(new RegExp(`/sessions/${sessionLink?.match(/sessions\/(\d+)/)?.[1]}\\?date=`))
+  await expect(page.getByText('Учебный пример', { exact: true }).first()).toBeVisible()
+  await page.screenshot({ path: info.outputPath('presentation-session.png'), fullPage: true })
+  await controls.getByRole('button', { name: 'Далее' }).click()
+  await expect(page.getByRole('heading', { level: 1, name: 'Аналитика' })).toBeVisible()
+  await expect(page.getByRole('combobox', { name: /^Группа/ })).toHaveValue('1')
+  await expect(controls.getByRole('button', { name: 'Далее' })).toBeDisabled()
+  await page.screenshot({ path: info.outputPath('presentation-analytics.png'), fullPage: true })
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await controls.getByRole('button', { name: 'Назад' }).click()
+  await expect(controls.getByRole('status')).toHaveText('3 / 4 · Первое занятие')
+  await controls.getByRole('button', { name: 'Вернуться к работе' }).click()
+  await expect(page).toHaveURL(original)
+  await page.setViewportSize({ width: 320, height: 720 })
+  await page.getByRole('button', { name: 'Режим показа' }).click()
+  await expect(controls).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  await page.screenshot({ path: info.outputPath('presentation-mobile.png'), fullPage: true })
+  await page.keyboard.press('Escape')
+  await expect(controls).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Режим показа' })).toBeFocused()
+  await expect(page).toHaveURL('http://127.0.0.1:4173/#/')
+})
+
+test('mobile drawer, session link, role navigation and local dialog focus', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('http://127.0.0.1:4173/#/sessions')
+  await page.locator('tbody a').first().click()
+  await expect(page.getByText('Учебный пример', { exact: true }).first()).toBeVisible()
+  await page.getByRole('button', { name: 'Открыть навигацию' }).click()
+  await page.getByRole('link', { name: 'Распознавание', exact: true }).click()
+  await page.getByRole('button', { name: 'Проверить файл' }).click()
+  await expect(page.getByRole('dialog')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Проверить файл' })).toBeFocused()
+  await page.getByRole('button', { name: 'Открыть навигацию' }).click()
+  await page.getByLabel('Роль в учебном примере').selectOption('analyst')
+  await expect(page.getByRole('heading', { name: 'Аналитика' })).toBeVisible()
+  await page.goto('http://127.0.0.1:4173/#/admin/users')
+  // Refresh resets the demo role by design, so switch once more before direct navigation.
+  await page.getByRole('button', { name: 'Открыть навигацию' }).click()
+  await page.getByLabel('Роль в учебном примере').selectOption('analyst')
+  await page.evaluate(() => { location.hash = '#/admin/users' })
+  await expect(page.getByRole('heading', { name: 'Недостаточно прав' })).toBeVisible()
+})
+
+test('live login/session/CSRF logout and expired deep link (mock API)', async ({ page }, info) => {
+  let loggedIn = false
+  let logoutCsrf = ''
+  const user = { id: 9, username: 'test-analyst', role: 'analyst', enabled: true, csrf_token: 'test-csrf' }
+  await page.route('**/api/v1/**', async route => {
+    const path = new URL(route.request().url()).pathname
+    if (path.endsWith('/auth/login')) { expect(route.request().postDataJSON()).toEqual({ username: 'test-analyst', password: 'test-password' }); loggedIn = true; return route.fulfill({ json: user }) }
+    if (path.endsWith('/auth/me')) return route.fulfill({ status: loggedIn ? 200 : 401, json: loggedIn ? user : {} })
+    if (path.endsWith('/auth/logout')) { logoutCsrf = route.request().headers()['x-csrf-token']; loggedIn = false; return route.fulfill({ status: 204 }) }
+    if (path.endsWith('/groups')) return route.fulfill({ json: [] })
+    return route.fulfill({ json: [] })
+  })
+  await page.goto('http://127.0.0.1:4174/analytics')
+  await expect(page.getByRole('heading', { name: 'Вход в систему' })).toBeVisible()
+  await page.screenshot({ path: info.outputPath('login.png'), fullPage: true })
+  expect((await new AxeBuilder({ page }).analyze()).violations).toEqual([])
+  await page.getByLabel('Логин', { exact: true }).fill('test-analyst')
+  await page.getByLabel('Пароль', { exact: true }).fill('test-password')
+  await page.getByRole('button', { name: 'Войти', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Аналитика' })).toBeVisible()
+  await expect(page.getByRole('link', { name: 'Распознавание' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Выйти', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Вход в систему' })).toBeVisible()
+  expect(logoutCsrf).toBe('test-csrf')
+})

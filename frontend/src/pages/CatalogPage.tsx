@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { Discipline, Group, Teacher } from '../api/types'
 import { Modal } from '../components/Modal'
+import { useSession } from '../auth/SessionProvider'
 
 type Tab = 'groups' | 'teachers' | 'disciplines'
 
@@ -14,6 +15,7 @@ const TABS: { key: Tab; label: string }[] = [
 function StudentsCountCell({ group, onSaved }: { group: Group; onSaved: () => void }) {
   const [value, setValue] = useState(String(group.students_count))
   const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => setValue(String(group.students_count)), [group.students_count])
 
@@ -24,16 +26,20 @@ function StudentsCountCell({ group, onSaved }: { group: Group; onSaved: () => vo
       return
     }
     setSaving(true)
+    setError(null)
     try {
       await api.updateGroup(group.id, { students_count: parsed })
       onSaved()
+    } catch (e) {
+      setError((e as Error).message)
     } finally {
       setSaving(false)
     }
   }
 
   return (
-    <input
+    <><input
+      aria-label={`Численность ${group.name}`}
       className="input num"
       style={{ width: 76 }}
       type="number"
@@ -45,16 +51,19 @@ function StudentsCountCell({ group, onSaved }: { group: Group; onSaved: () => vo
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
       }}
-    />
+    />{error && <span role="alert">{error}</span>}</>
   )
 }
 
 function GroupFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ name: '', course: 1, faculty: '', students_count: 0 })
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (saving) return
+    setSaving(true)
     try {
       await api.createGroup({
         name: form.name.trim(),
@@ -66,16 +75,19 @@ function GroupFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
       onClose()
     } catch (e) {
       setError((e as Error).message)
+    } finally {
+      setSaving(false)
     }
   }
 
   return (
-    <Modal title="Новая группа" onClose={onClose}>
+    <Modal title="Новая группа" onClose={() => { if (!saving) onClose() }}>
       <form className="modal__form" onSubmit={submit}>
         {error && <div className="alert alert--error" style={{ margin: 0 }}>{error}</div>}
         <div className="field">
           <label>Название</label>
           <input
+            aria-label="Название группы"
             className="input"
             required
             value={form.name}
@@ -87,6 +99,7 @@ function GroupFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           <div className="field" style={{ flex: 1 }}>
             <label>Курс</label>
             <input
+              aria-label="Курс"
               className="input"
               type="number"
               min={1}
@@ -98,6 +111,7 @@ function GroupFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
           <div className="field" style={{ flex: 1 }}>
             <label>Численность</label>
             <input
+              aria-label="Численность группы"
               className="input"
               type="number"
               min={0}
@@ -109,17 +123,18 @@ function GroupFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
         <div className="field">
           <label>Факультет</label>
           <input
+            aria-label="Факультет"
             className="input"
             value={form.faculty}
             onChange={(e) => setForm({ ...form, faculty: e.target.value })}
           />
         </div>
         <div className="modal__actions">
-          <button type="button" className="btn btn--ghost" onClick={onClose}>
+          <button type="button" className="btn btn--ghost" disabled={saving} onClick={onClose}>
             Отмена
           </button>
-          <button type="submit" className="btn">
-            Создать
+          <button type="submit" className="btn" disabled={saving}>
+            {saving ? 'Создание…' : 'Создать'}
           </button>
         </div>
       </form>
@@ -128,6 +143,8 @@ function GroupFormModal({ onClose, onSaved }: { onClose: () => void; onSaved: ()
 }
 
 export function CatalogPage() {
+  const { user } = useSession()
+  const canEdit = user?.role === 'admin'
   const [tab, setTab] = useState<Tab>('groups')
   const [groups, setGroups] = useState<Group[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -154,7 +171,7 @@ export function CatalogPage() {
           <h1>Справочники</h1>
           <p>Численность группы участвует в расчёте процента посещаемости</p>
         </div>
-        {tab === 'groups' && (
+        {tab === 'groups' && canEdit && (
           <button className="btn" onClick={() => setShowGroupForm(true)}>
             Добавить группу
           </button>
@@ -197,7 +214,7 @@ export function CatalogPage() {
                   <td className="num">{group.course}</td>
                   <td>{group.faculty ?? '—'}</td>
                   <td>
-                    <StudentsCountCell group={group} onSaved={load} />
+                    {canEdit ? <StudentsCountCell group={group} onSaved={load} /> : group.students_count}
                   </td>
                 </tr>
               ))}

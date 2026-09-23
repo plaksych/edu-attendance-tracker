@@ -88,6 +88,7 @@ function CameraFormModal({
         <div className="field">
           <label>Имя камеры</label>
           <input
+            aria-label="Имя камеры"
             className="input"
             required
             value={form.name}
@@ -98,16 +99,20 @@ function CameraFormModal({
         <div className="field">
           <label>{isNew ? 'RTSP-адрес' : 'Новый RTSP-адрес (пусто — без изменений)'}</label>
           <input
+            aria-label={isNew ? 'RTSP-адрес' : 'Новый RTSP-адрес'}
+            type="password"
+            autoComplete="new-password"
             className="input"
             required={isNew}
             value={form.rtsp_url}
             onChange={(e) => setForm({ ...form, rtsp_url: e.target.value })}
-            placeholder="rtsp://user:password@192.168.1.10:554/stream1"
+            placeholder="rtsp://192.168.1.10:554/stream1"
           />
         </div>
         <div className="field">
           <label>Capture-группа (сетевая зона)</label>
           <input
+            aria-label="Сетевая зона камеры"
             className="input"
             value={form.capture_group}
             onChange={(e) => setForm({ ...form, capture_group: e.target.value })}
@@ -197,6 +202,7 @@ function AssignModal({
         {rows.map((row, index) => (
           <div key={index} style={{ display: 'flex', gap: 8 }}>
             <select
+              aria-label={`Камера ${index + 1}`}
               className="select"
               style={{ flex: 1 }}
               value={row.camera_id}
@@ -222,6 +228,7 @@ function AssignModal({
               ))}
             </select>
             <select
+              aria-label={`Роль камеры ${index + 1}`}
               className="select"
               value={row.role}
               onChange={(e) => {
@@ -302,11 +309,12 @@ function ClassroomFormModal({
         {error && <div className="alert alert--error" style={{ margin: 0 }}>{error}</div>}
         <div className="field">
           <label>Номер аудитории</label>
-          <input className="input" required value={number} onChange={(e) => setNumber(e.target.value)} />
+          <input aria-label="Номер аудитории" className="input" required value={number} onChange={(e) => setNumber(e.target.value)} />
         </div>
         <div className="field">
           <label>Вместимость</label>
           <input
+            aria-label="Вместимость"
             className="input"
             type="number"
             min={1}
@@ -443,6 +451,7 @@ export function CamerasPage() {
                   </td>
                   <td>
                     <select
+                      aria-label={`Агрегация аудитории ${classroom.number}`}
                       className="select"
                       value={classroom.aggregation_mode}
                       onChange={(e) => changeMode(classroom, e.target.value as AggregationMode)}
@@ -498,13 +507,14 @@ export function CamerasPage() {
                 <tr key={camera.id}>
                   <td className="cell-main">{camera.name}</td>
                   <td style={{ fontFamily: 'ui-monospace, monospace', fontSize: 12.5 }}>
-                    {camera.rtsp_url}
+                    Адрес настроен · скрыт в целях безопасности
                   </td>
                   <td>{camera.capture_group}</td>
                   <td>{camera.classroom_number ?? '—'}</td>
                   <td>
                     <span className="switch">
                       <input
+                        aria-label={`Участие камеры ${camera.name} в замерах`}
                         type="checkbox"
                         checked={camera.enabled}
                         onChange={() => toggleCamera(camera)}

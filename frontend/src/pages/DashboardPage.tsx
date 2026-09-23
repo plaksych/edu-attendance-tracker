@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import {
   CartesianGrid,
   Line,
@@ -8,12 +9,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { api } from '../api/client'
+import { api, isStaticData } from '../api/client'
+import { useSession } from '../auth/SessionProvider'
+import { mayOperate } from '../auth/permissions'
 import type { Discipline, EntityStats, Group, GroupTimeline, SummaryStats, Teacher } from '../api/types'
 import { IconAttendance, IconCalendarMark, IconCamera, IconPulse } from '../components/icons'
 import { formatRate, RateCell } from '../components/RateCell'
 import { StatCard } from '../components/StatCard'
-import { fmtDateShort } from '../lib/format'
+import { DEMO_DATE, fmtDateShort, shiftDate } from '../lib/format'
 
 type Dimension = 'groups' | 'teachers' | 'disciplines'
 
@@ -24,6 +27,7 @@ const DIMENSIONS: { key: Dimension; label: string; breakdownTitle: string }[] = 
 ]
 
 export function DashboardPage() {
+  const { user } = useSession()
   const [summary, setSummary] = useState<SummaryStats | null>(null)
   const [groups, setGroups] = useState<Group[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
@@ -33,17 +37,22 @@ export function DashboardPage() {
   const [stats, setStats] = useState<EntityStats | null>(null)
   const [timeline, setTimeline] = useState<GroupTimeline | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [revision, setRevision] = useState(0)
 
   useEffect(() => {
+    let active = true
+    setError(null)
     Promise.all([api.getSummary(), api.getGroups(), api.getTeachers(), api.getDisciplines()])
       .then(([summaryData, groupsData, teachersData, disciplinesData]) => {
+        if (!active) return
         setSummary(summaryData)
         setGroups(groupsData)
         setTeachers(teachersData)
         setDisciplines(disciplinesData)
       })
-      .catch((e: Error) => setError(e.message))
-  }, [])
+      .catch((e: Error) => { if (active) setError(e.message) })
+    return () => { active = false }
+  }, [revision])
 
   const options = useMemo(() => {
     if (dimension === 'groups') return groups.map((g) => ({ id: g.id, name: g.name }))
@@ -57,6 +66,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     if (selectedId === null) return
+    let active = true
     setStats(null)
     setTimeline(null)
     const loadStats =
@@ -65,16 +75,17 @@ export function DashboardPage() {
         : dimension === 'teachers'
           ? api.getTeacherStats(selectedId)
           : api.getDisciplineStats(selectedId)
-    loadStats.then(setStats).catch((e: Error) => setError(e.message))
+    loadStats.then(data => { if (active) setStats(data) }).catch((e: Error) => { if (active) setError(e.message) })
     if (dimension === 'groups') {
       api
         .getGroupTimeline(selectedId)
-        .then(setTimeline)
-        .catch(() => setTimeline(null))
+        .then(data => { if (active) setTimeline(data) })
+        .catch(() => { if (active) setTimeline(null) })
     }
-  }, [dimension, selectedId])
+    return () => { active = false }
+  }, [dimension, selectedId, revision])
 
-  if (error) return <div className="alert alert--error">Ошибка загрузки: {error}</div>
+  if (error) return <div className="alert alert--error" role="alert">{error}<button className="btn btn--ghost" onClick={() => setRevision(n => n + 1)}>Повторить</button></div>
   if (!summary) return <div className="loading">Загрузка…</div>
 
   const chartData =
@@ -90,16 +101,17 @@ export function DashboardPage() {
     <>
       <header className="page-header">
         <div>
-          <h1>Дашборд</h1>
-          <p>Посещаемость по данным автоматических замеров</p>
+          <h1>Обзор</h1>
+          <p>{isStaticData ? `Учебный период: ${shiftDate(DEMO_DATE, -13)} — ${DEMO_DATE}` : 'Сводка доступных занятий по данным сервера'}</p>
         </div>
+        {user && mayOperate(user.role) && <Link className="btn" to="/recognition">{isStaticData ? 'Показать пример' : 'Загрузить материал'}</Link>}
       </header>
 
       <div className="grid grid--stats">
         <StatCard
-          label="Средняя посещаемость"
+          label="Оценка присутствия"
           value={formatRate(summary.avg_attendance_rate)}
-          hint="по всем занятиям с замерами"
+          hint={isStaticData ? 'взвешено по численности групп' : 'агрегат API по доступным занятиям'}
           icon={<IconAttendance />}
           tone="teal"
         />
@@ -111,7 +123,7 @@ export function DashboardPage() {
           tone="blue"
         />
         <StatCard
-          label="Замеры выполнены"
+          label="Занятия с полным итогом"
           value={measured > 0 ? `${summary.records_complete} / ${measured}` : '—'}
           hint={
             measured > 0
@@ -135,6 +147,7 @@ export function DashboardPage() {
           <div className="segmented">
             {DIMENSIONS.map((d) => (
               <button
+                aria-pressed={dimension === d.key}
                 key={d.key}
                 className={dimension === d.key ? 'active' : ''}
                 onClick={() => setDimension(d.key)}
@@ -144,6 +157,7 @@ export function DashboardPage() {
             ))}
           </div>
           <select
+            aria-label="Объект аналитики"
             className="select"
             value={selectedId ?? ''}
             onChange={(e) => setSelectedId(Number(e.target.value))}
@@ -178,7 +192,7 @@ export function DashboardPage() {
                 tone="teal"
               />
               <StatCard
-                label="Полные замеры"
+                label="Занятия с двумя замерами"
                 value={stats.records_complete}
                 hint={`частичных: ${stats.records_partial}, неудачных: ${stats.records_failed}`}
                 tone="green"
@@ -192,7 +206,7 @@ export function DashboardPage() {
                   <LineChart data={chartData} margin={{ top: 4, right: 12, bottom: 0, left: -18 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                     <XAxis dataKey="date" fontSize={12} tickLine={false} />
-                    <YAxis domain={[0, 100]} fontSize={12} unit="%" tickLine={false} />
+                    <YAxis domain={[0, 'auto']} fontSize={12} unit="%" tickLine={false} />
                     <Tooltip formatter={(value: number) => [`${value}%`, 'Посещаемость']} />
                     <Line
                       type="monotone"
@@ -200,10 +214,12 @@ export function DashboardPage() {
                       stroke="var(--primary)"
                       strokeWidth={2}
                       dot={{ r: 2.5 }}
-                      connectNulls
+                      connectNulls={false}
+                      isAnimationActive={false}
                     />
                   </LineChart>
                 </ResponsiveContainer>
+                <Link className="text-link" to={`/analytics?group=${selectedId}`}>Данные графика и отчёт</Link>
               </div>
             )}
 

@@ -1,0 +1,6219 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Educational Attendance Tracker",
+    "description": "\nBackend API системы контроля посещаемости.\n\nФактический поток данных:\n\n1. Frontend работает с backend через REST API.\n2. Отдельный Measurement Scheduler создаёт занятия на 14 дней вперёд и по два замера\n   на занятие: через 15 минут после начала и за 15 минут до конца.\n3. Для каждого замера создаются задания записи по камерам аудитории; Capture Manager\n   забирает их из PostgreSQL, пишет ролики с RTSP и загружает их в MinIO.\n4. Recognition-воркеры берут задания распознавания из очереди, считают людей локальной\n   моделью YOLO и сохраняют агрегаты и размеченный кадр.\n5. Backend объединяет результаты камер и двух замеров в итог занятия и выдаёт frontend\n   временные presigned-ссылки на медиа.\n",
+    "version": "2.0.0"
+  },
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "Доступ"
+        ],
+        "summary": "Login",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__api__v1__auth__SessionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "Доступ"
+        ],
+        "summary": "Me",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__api__v1__auth__SessionRead"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "Доступ"
+        ],
+        "summary": "Logout",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "tags": [
+          "Доступ"
+        ],
+        "summary": "Users",
+        "operationId": "users_api_v1_admin_users_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UserRead"
+                  },
+                  "title": "Response Users Api V1 Admin Users Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Доступ"
+        ],
+        "summary": "Create User",
+        "operationId": "create_user_api_v1_admin_users_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{user_id}": {
+      "patch": {
+        "tags": [
+          "Доступ"
+        ],
+        "summary": "Update User",
+        "operationId": "update_user_api_v1_admin_users__user_id__patch",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/audit": {
+      "get": {
+        "tags": [
+          "Доступ"
+        ],
+        "summary": "Audit Events",
+        "operationId": "audit_events_api_v1_admin_audit_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AuditRead"
+                  },
+                  "title": "Response Audit Events Api V1 Admin Audit Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/system": {
+      "get": {
+        "tags": [
+          "Доступ"
+        ],
+        "summary": "System Status",
+        "operationId": "system_status_api_v1_admin_system_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemRead"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/groups": {
+      "get": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Получить список групп",
+        "description": "Возвращает учебные группы, отсортированные по названию.",
+        "operationId": "list_groups_api_v1_groups_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GroupRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Groups Api V1 Groups Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Создать группу",
+        "description": "Создаёт учебную группу. `students_count` используется как ожидаемая численность при расчёте посещаемости.",
+        "operationId": "create_group_api_v1_groups_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Запись с таким уникальным значением уже существует"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/groups/{group_id}": {
+      "patch": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Изменить группу",
+        "description": "Частичное обновление: чаще всего используется для указания численности группы.",
+        "operationId": "update_group_api_v1_groups__group_id__patch",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Group Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GroupUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teachers": {
+      "get": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Получить список преподавателей",
+        "description": "Возвращает преподавателей, отсортированных по ФИО.",
+        "operationId": "list_teachers_api_v1_teachers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TeacherRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Teachers Api V1 Teachers Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Создать преподавателя",
+        "description": "Создаёт преподавателя для дальнейшей привязки к расписанию.",
+        "operationId": "create_teacher_api_v1_teachers_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeacherCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeacherRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Запись с таким уникальным значением уже существует"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/disciplines": {
+      "get": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Получить список дисциплин",
+        "description": "Возвращает дисциплины, отсортированные по названию.",
+        "operationId": "list_disciplines_api_v1_disciplines_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DisciplineRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Disciplines Api V1 Disciplines Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Создать дисциплину",
+        "description": "Создаёт дисциплину для использования в расписании и статистике.",
+        "operationId": "create_discipline_api_v1_disciplines_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DisciplineCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DisciplineRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Запись с таким уникальным значением уже существует"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/classrooms": {
+      "get": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Получить список аудиторий",
+        "description": "Возвращает аудитории с режимом объединения камер и привязанными камерами.",
+        "operationId": "list_classrooms_api_v1_classrooms_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ClassroomRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Classrooms Api V1 Classrooms Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Создать аудиторию",
+        "description": "Создаёт аудиторию. Камеры привязываются отдельно через `PUT /classrooms/{id}/cameras`.",
+        "operationId": "create_classroom_api_v1_classrooms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassroomCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassroomRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Запись с таким уникальным значением уже существует"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}": {
+      "patch": {
+        "tags": [
+          "Справочники"
+        ],
+        "summary": "Изменить аудиторию",
+        "description": "Частичное обновление вместимости и режима объединения камер.",
+        "operationId": "update_classroom_api_v1_classrooms__classroom_id__patch",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "classroom_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Classroom Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassroomUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassroomRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/cameras": {
+      "get": {
+        "tags": [
+          "Камеры"
+        ],
+        "summary": "Получить список камер",
+        "description": "Возвращает камеры с замаскированными учётными данными в адресе.",
+        "operationId": "list_cameras_api_v1_cameras_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CameraRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Cameras Api V1 Cameras Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Камеры"
+        ],
+        "summary": "Создать камеру",
+        "description": "Регистрирует камеру. `capture_group` определяет, какой capture-узел будет её опрашивать.",
+        "operationId": "create_camera_api_v1_cameras_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Камера с таким именем уже существует"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/cameras/{camera_id}": {
+      "patch": {
+        "tags": [
+          "Камеры"
+        ],
+        "summary": "Изменить камеру",
+        "description": "Частичное обновление. Адрес меняется только если поле `rtsp_url` передано.",
+        "operationId": "update_camera_api_v1_cameras__camera_id__patch",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CameraUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CameraRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Камеры"
+        ],
+        "summary": "Удалить камеру",
+        "description": "Удаляет камеру без истории записей. Камеру с завершёнными или текущими заданиями следует отключить, чтобы сохранить историю.",
+        "operationId": "delete_camera_api_v1_cameras__camera_id__delete",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "camera_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Camera Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Камера не найдена"
+          },
+          "409": {
+            "description": "У камеры есть задания записи в истории"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/classrooms/{classroom_id}/cameras": {
+      "put": {
+        "tags": [
+          "Камеры"
+        ],
+        "summary": "Назначить камеры аудитории",
+        "description": "Полностью заменяет набор камер аудитории. Штатно поддерживается не более двух камер; для режима primary_backup требуется ровно одна камера с ролью primary.",
+        "operationId": "assign_classroom_cameras_api_v1_classrooms__classroom_id__cameras_put",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "classroom_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Classroom Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ClassroomCameraAssign"
+                },
+                "title": "Payload"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClassroomRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Камера уже привязана к другой аудитории"
+          },
+          "422": {
+            "description": "Набор камер противоречит режиму объединения"
+          }
+        }
+      }
+    },
+    "/api/v1/recognition/uploads": {
+      "post": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "Загрузить видео или изображение для распознавания",
+        "description": "Сохраняет файл в MinIO и создаёт задание для recognition-worker. Поддерживаются MP4, MOV, AVI, WebM, JPG, PNG и WebP. Видеофайл анализируется по выборке кадров, изображение — одним кадром.",
+        "operationId": "create_upload_api_v1_recognition_uploads_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_upload_api_v1_recognition_uploads_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionUploadRead"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Размер файла превышает лимит"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "Получить очередь загруженных файлов",
+        "description": "Возвращает последние задания распознавания, включая состояние и результат.",
+        "operationId": "list_uploads_api_v1_recognition_uploads_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RecognitionUploadRead"
+                  },
+                  "title": "Response List Uploads Api V1 Recognition Uploads Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recognition/evaluation/summary": {
+      "get": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "Получить качество по материалам с ручной разметкой",
+        "description": "Считает ошибки только по завершённым загрузкам, в которых при создании задано эталонное число людей.",
+        "operationId": "get_evaluation_summary_api_v1_recognition_evaluation_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionEvaluationSummary"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/recognition/uploads/{upload_id}": {
+      "get": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "Получить состояние задания распознавания",
+        "operationId": "get_upload_api_v1_recognition_uploads__upload_id__get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionUploadRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recognition/uploads/{upload_id}/media": {
+      "get": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "Получить временные ссылки на файл и размеченный кадр",
+        "operationId": "get_upload_media_api_v1_recognition_uploads__upload_id__media_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionUploadMediaRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recognition/capabilities": {
+      "get": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "Capabilities",
+        "operationId": "capabilities_api_v1_recognition_capabilities_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionCapabilities"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/recognition/uploads/{upload_id}/retry": {
+      "post": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "Retry",
+        "operationId": "retry_api_v1_recognition_uploads__upload_id__retry_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionUploadRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recognition/uploads/{upload_id}/history": {
+      "get": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "History",
+        "operationId": "history_api_v1_recognition_uploads__upload_id__history_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecognitionHistoryRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/recognition/uploads/{upload_id}/corrections": {
+      "post": {
+        "tags": [
+          "Распознавание"
+        ],
+        "summary": "Correct",
+        "operationId": "correct_api_v1_recognition_uploads__upload_id__corrections_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "upload_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Upload Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CorrectionCreated"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/calendar": {
+      "get": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "List Calendar",
+        "operationId": "list_calendar_api_v1_schedule_calendar_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CalendarRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Calendar Api V1 Schedule Calendar Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/schedule/calendar/{day}": {
+      "put": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Set Calendar",
+        "operationId": "set_calendar_api_v1_schedule_calendar__day__put",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "day",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Day"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CalendarRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule": {
+      "get": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Получить расписание",
+        "description": "Возвращает элементы расписания с вложенными справочниками. Можно фильтровать по группе, преподавателю и ISO-дню недели.",
+        "operationId": "list_schedule_api_v1_schedule_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ID учебной группы",
+              "title": "Group Id"
+            },
+            "description": "ID учебной группы"
+          },
+          {
+            "name": "teacher_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ID преподавателя",
+              "title": "Teacher Id"
+            },
+            "description": "ID преподавателя"
+          },
+          {
+            "name": "weekday",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "maximum": 7,
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ISO-день недели: 1 — понедельник, 7 — воскресенье",
+              "title": "Weekday"
+            },
+            "description": "ISO-день недели: 1 — понедельник, 7 — воскресенье"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ScheduleRead"
+                  },
+                  "title": "Response List Schedule Api V1 Schedule Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Создать занятие в расписании",
+        "description": "Добавляет одну запись расписания. Слот группы уникален по дню, времени начала и типу недели.",
+        "operationId": "create_schedule_item_api_v1_schedule_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScheduleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Слот уже занят или указаны несуществующие справочники"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/{item_id}": {
+      "delete": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Удалить запись расписания",
+        "description": "Удаляет запись, у которой ещё нет созданных занятий. Записи с историей защищены от удаления, чтобы не потерять данные посещаемости.",
+        "operationId": "delete_schedule_item_api_v1_schedule__item_id__delete",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Запись расписания не найдена"
+          },
+          "409": {
+            "description": "Для записи уже есть занятия в истории"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/template": {
+      "get": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Скачать Excel-шаблон расписания",
+        "description": "Возвращает построчный `.xlsx`-шаблон для загрузки расписания через `/schedule/import`.",
+        "operationId": "download_template_api_v1_schedule_template_get",
+        "responses": {
+          "200": {
+            "description": "Excel-файл с шаблоном расписания",
+            "content": {
+              "application/json": {
+                "schema": {}
+              },
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/schedule/import": {
+      "post": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Импортировать расписание из Excel",
+        "description": "Принимает `.xlsx` и автоматически определяет формат: институтская сетка или простой построчный шаблон. Создаёт недостающие справочники и записи расписания.",
+        "operationId": "import_schedule_api_v1_schedule_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_schedule_api_v1_schedule_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleImportResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Файл не является `.xlsx` или содержит некорректные данные"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/schedule/import/preview": {
+      "post": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Preview Import",
+        "operationId": "preview_import_api_v1_schedule_import_preview_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_preview_import_api_v1_schedule_import_preview_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreviewRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/schedule/import/{preview_id}/confirm": {
+      "post": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Confirm Import",
+        "operationId": "confirm_import_api_v1_schedule_import__preview_id__confirm_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "preview_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Preview Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScheduleImportResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/schedule/week-type": {
+      "get": {
+        "tags": [
+          "Расписание"
+        ],
+        "summary": "Определить тип учебной недели",
+        "description": "Возвращает белую или зелёную неделю для даты относительно `SEMESTER_START`.",
+        "operationId": "get_week_type_api_v1_schedule_week_type_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Дата проверки. Если не указана, используется текущая дата.",
+              "title": "Date"
+            },
+            "description": "Дата проверки. Если не указана, используется текущая дата."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WeekTypeRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/today": {
+      "get": {
+        "tags": [
+          "Занятия"
+        ],
+        "summary": "Получить занятия на сегодня",
+        "description": "Возвращает занятия текущей даты с состоянием обоих замеров и итогом посещаемости.",
+        "operationId": "list_today_api_v1_sessions_today_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/app__schemas__session__SessionRead"
+                  },
+                  "type": "array",
+                  "title": "Response List Today Api V1 Sessions Today Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/sessions": {
+      "get": {
+        "tags": [
+          "Занятия"
+        ],
+        "summary": "Получить занятия на дату",
+        "description": "Возвращает созданные планировщиком занятия и их состояние; чтение не создаёт записи.",
+        "operationId": "list_by_date_api_v1_sessions_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "description": "Дата занятий",
+              "title": "Date"
+            },
+            "description": "Дата занятий"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/app__schemas__session__SessionRead"
+                  },
+                  "title": "Response List By Date Api V1 Sessions Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}": {
+      "get": {
+        "tags": [
+          "Занятия"
+        ],
+        "summary": "Получить занятие с деталями замеров",
+        "description": "Возвращает занятие, оба замера, записи каждой камеры и результаты распознавания. Ссылки на медиа выдаются отдельно через `GET /captures/{id}/media`.",
+        "operationId": "get_session_api_v1_sessions__session_id__get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionDetail"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Занятие не найдено"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sessions/{session_id}/cancel": {
+      "post": {
+        "tags": [
+          "Занятия"
+        ],
+        "summary": "Отменить занятие",
+        "description": "Отменяет занятие и все его незавершённые замеры и задания записи.",
+        "operationId": "cancel_session_api_v1_sessions__session_id__cancel_post",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Session Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__schemas__session__SessionRead"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Занятие уже завершено или отменено"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/captures/{capture_id}/media": {
+      "get": {
+        "tags": [
+          "Занятия",
+          "Медиа"
+        ],
+        "summary": "Получить временные ссылки на медиа записи",
+        "description": "Выдаёт presigned-ссылки MinIO на исходный ролик и размеченный кадр. После истечения срока хранения вместо ссылки возвращается причина недоступности.",
+        "operationId": "get_capture_media_api_v1_captures__capture_id__media_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "capture_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Capture Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CaptureMediaRead"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Запись не найдена"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats/export.csv": {
+      "get": {
+        "tags": [
+          "Статистика"
+        ],
+        "summary": "Выгрузить агрегаты занятий без медиа и персональных результатов",
+        "operationId": "export_attendance_api_v1_stats_export_csv_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Date To"
+            }
+          },
+          {
+            "name": "group_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Group Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats/summary": {
+      "get": {
+        "tags": [
+          "Статистика"
+        ],
+        "summary": "Получить сводку для дашборда",
+        "description": "Возвращает общие счётчики и среднюю посещаемость по завершённым занятиям.",
+        "operationId": "get_summary_api_v1_stats_summary_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SummaryStats"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ]
+      }
+    },
+    "/api/v1/stats/teachers/{teacher_id}": {
+      "get": {
+        "tags": [
+          "Статистика"
+        ],
+        "summary": "Получить статистику преподавателя",
+        "description": "Возвращает агрегаты преподавателя и разбивку по группам.",
+        "operationId": "get_teacher_stats_api_v1_stats_teachers__teacher_id__get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "teacher_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Teacher Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityStats"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats/disciplines/{discipline_id}": {
+      "get": {
+        "tags": [
+          "Статистика"
+        ],
+        "summary": "Получить статистику дисциплины",
+        "description": "Возвращает агрегаты дисциплины и разбивку по группам.",
+        "operationId": "get_discipline_stats_api_v1_stats_disciplines__discipline_id__get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "discipline_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Discipline Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityStats"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats/groups/{group_id}": {
+      "get": {
+        "tags": [
+          "Статистика"
+        ],
+        "summary": "Получить статистику группы",
+        "description": "Возвращает агрегаты группы и разбивку по дисциплинам.",
+        "operationId": "get_group_stats_api_v1_stats_groups__group_id__get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Group Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityStats"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stats/groups/{group_id}/timeline": {
+      "get": {
+        "tags": [
+          "Статистика"
+        ],
+        "summary": "Получить динамику посещаемости группы",
+        "description": "Возвращает точки динамики по датам. Фильтры `date_from` и `date_to` ограничивают период.",
+        "operationId": "get_group_timeline_api_v1_stats_groups__group_id__timeline_get",
+        "security": [
+          {
+            "APIKeyCookie": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "group_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Group Id"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Начальная дата периода",
+              "title": "Date From"
+            },
+            "description": "Начальная дата периода"
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Конечная дата периода",
+              "title": "Date To"
+            },
+            "description": "Конечная дата периода"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GroupTimeline"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "Служебное"
+        ],
+        "summary": "Проверить состояние backend",
+        "description": "Возвращает `ok`, если backend-приложение запущено и отвечает на HTTP-запросы.",
+        "operationId": "health_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthRead"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "Служебное"
+        ],
+        "summary": "Ready",
+        "operationId": "ready_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AttendanceCalculationStatus": {
+        "type": "string",
+        "enum": [
+          "complete",
+          "partial",
+          "failed"
+        ],
+        "title": "AttendanceCalculationStatus",
+        "description": "complete — оба замера успешны; partial — один; failed — ни одного."
+      },
+      "AttendanceRead": {
+        "properties": {
+          "expected_count": {
+            "type": "integer",
+            "title": "Expected Count",
+            "description": "Ожидаемая численность группы",
+            "examples": [
+              28
+            ]
+          },
+          "after_start_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After Start Count",
+            "description": "Замер после начала занятия",
+            "examples": [
+              24
+            ]
+          },
+          "before_end_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before End Count",
+            "description": "Замер перед концом занятия",
+            "examples": [
+              22
+            ]
+          },
+          "detected_average": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detected Average",
+            "description": "Среднее по успешным замерам",
+            "examples": [
+              23
+            ]
+          },
+          "detected_max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detected Max",
+            "description": "Максимум по замерам",
+            "examples": [
+              24
+            ]
+          },
+          "attendance_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attendance Rate",
+            "description": "Доля посещаемости от 0 до 1",
+            "examples": [
+              0.82
+            ]
+          },
+          "calculation_status": {
+            "$ref": "#/components/schemas/AttendanceCalculationStatus",
+            "description": "complete — оба замера, partial — один, failed — ни одного"
+          },
+          "calculated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expected_count",
+          "after_start_count",
+          "before_end_count",
+          "detected_average",
+          "detected_max",
+          "attendance_rate",
+          "calculation_status",
+          "calculated_at"
+        ],
+        "title": "AttendanceRead"
+      },
+      "AuditRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "action": {
+            "type": "string",
+            "title": "Action"
+          },
+          "object_type": {
+            "type": "string",
+            "title": "Object Type"
+          },
+          "object_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Id"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "request_id": {
+            "type": "string",
+            "title": "Request Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "actor_id",
+          "action",
+          "object_type",
+          "object_id",
+          "reason",
+          "request_id",
+          "created_at"
+        ],
+        "title": "AuditRead"
+      },
+      "Body_create_upload_api_v1_recognition_uploads_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "description": "Видео или изображение"
+          },
+          "sample_rate_fps": {
+            "type": "number",
+            "maximum": 10,
+            "minimum": 0.1,
+            "title": "Sample Rate Fps",
+            "description": "Кадров в секунду для видео; для изображения не используется",
+            "default": 1
+          },
+          "confidence_threshold": {
+            "type": "number",
+            "maximum": 0.95,
+            "minimum": 0.05,
+            "title": "Confidence Threshold",
+            "description": "Минимальная уверенность детектора",
+            "default": 0.35
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Краткое название материала для журнала проверки"
+          },
+          "reference_people_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 1000,
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference People Count",
+            "description": "Число людей, вручную отмеченное на материале"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "measurement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measurement Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_create_upload_api_v1_recognition_uploads_post"
+      },
+      "Body_import_schedule_api_v1_schedule_import_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_import_schedule_api_v1_schedule_import_post"
+      },
+      "Body_preview_import_api_v1_schedule_import_preview_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_preview_import_api_v1_schedule_import_preview_post"
+      },
+      "BreakdownItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "ID сущности в разбивке",
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Название сущности в разбивке",
+            "examples": [
+              "Базы данных"
+            ]
+          },
+          "sessions": {
+            "type": "integer",
+            "title": "Sessions",
+            "description": "Количество завершённых занятий",
+            "examples": [
+              14
+            ]
+          },
+          "avg_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rate",
+            "description": "Средняя посещаемость",
+            "examples": [
+              0.83
+            ]
+          },
+          "avg_detected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Detected",
+            "description": "Среднее число найденных людей",
+            "examples": [
+              23.4
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "sessions",
+          "avg_rate",
+          "avg_detected"
+        ],
+        "title": "BreakdownItem",
+        "description": "Строка разбивки: посещаемость в разрезе группы/дисциплины/преподавателя."
+      },
+      "CalendarInput": {
+        "properties": {
+          "teaching": {
+            "type": "boolean",
+            "title": "Teaching",
+            "default": false
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 7,
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday"
+          },
+          "week_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(white|green|every)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week Type"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "CalendarInput"
+      },
+      "CalendarRead": {
+        "properties": {
+          "teaching": {
+            "type": "boolean",
+            "title": "Teaching",
+            "default": false
+          },
+          "weekday": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 7,
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekday"
+          },
+          "week_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(white|green|every)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Week Type"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 3,
+            "title": "Reason"
+          },
+          "day": {
+            "type": "string",
+            "format": "date",
+            "title": "Day"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason",
+          "day"
+        ],
+        "title": "CalendarRead"
+      },
+      "CameraAggregationMode": {
+        "type": "string",
+        "enum": [
+          "single",
+          "maximum",
+          "sum",
+          "primary_backup"
+        ],
+        "title": "CameraAggregationMode",
+        "description": "Как объединять результаты камер одной аудитории.\n\nsingle         — одна камера;\nmaximum        — зоны обзора пересекаются, берётся максимум;\nsum            — зоны не пересекаются, результаты суммируются;\nprimary_backup — основная камера, резервная используется при сбое."
+      },
+      "CameraBrief": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CameraBrief"
+      },
+      "CameraCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Уникальное имя камеры",
+            "examples": [
+              "cam-302-front"
+            ]
+          },
+          "capture_group": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Capture Group",
+            "description": "Сетевая зона или capture-узел, обслуживающий камеру",
+            "default": "default",
+            "examples": [
+              "building-a"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Отключённая камера не участвует в замерах",
+            "default": true
+          },
+          "rtsp_url": {
+            "type": "string",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Rtsp Url",
+            "description": "RTSP-адрес с IP из разрешённой администратором подсети",
+            "examples": [
+              "rtsp://user:password@192.168.1.10:554/stream1"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "rtsp_url"
+        ],
+        "title": "CameraCreate",
+        "example": {
+          "capture_group": "building-a",
+          "enabled": true,
+          "name": "cam-302-front",
+          "rtsp_url": "rtsp://user:password@192.168.1.10:554/stream1"
+        }
+      },
+      "CameraRead": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Уникальное имя камеры",
+            "examples": [
+              "cam-302-front"
+            ]
+          },
+          "capture_group": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Capture Group",
+            "description": "Сетевая зона или capture-узел, обслуживающий камеру",
+            "default": "default",
+            "examples": [
+              "building-a"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Отключённая камера не участвует в замерах",
+            "default": true
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "rtsp_url": {
+            "type": "string",
+            "title": "Rtsp Url",
+            "description": "Всегда пустая строка: адрес и учётные данные не выдаются API",
+            "examples": [
+              ""
+            ]
+          },
+          "classroom_number": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classroom Number",
+            "description": "Аудитория, к которой привязана камера",
+            "examples": [
+              "302"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "id",
+          "rtsp_url",
+          "created_at"
+        ],
+        "title": "CameraRead"
+      },
+      "CameraRole": {
+        "type": "string",
+        "enum": [
+          "primary",
+          "secondary",
+          "backup"
+        ],
+        "title": "CameraRole"
+      },
+      "CameraUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "rtsp_url": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rtsp Url",
+            "description": "Новый адрес; если не передан, адрес не меняется"
+          },
+          "capture_group": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capture Group"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "title": "CameraUpdate"
+      },
+      "CaptureMediaRead": {
+        "properties": {
+          "video_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Url",
+            "description": "Временная ссылка на исходный ролик; null, если видео недоступно"
+          },
+          "video_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Unavailable Reason",
+            "description": "Почему видео недоступно",
+            "examples": [
+              "медиа удалено по сроку хранения"
+            ]
+          },
+          "annotated_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotated Url",
+            "description": "Временная ссылка на размеченный кадр; null, если кадр недоступен"
+          },
+          "annotated_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotated Unavailable Reason"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "title": "Expires In Seconds",
+            "description": "Срок действия выданных ссылок",
+            "examples": [
+              900
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "video_url",
+          "video_unavailable_reason",
+          "annotated_url",
+          "annotated_unavailable_reason",
+          "expires_in_seconds"
+        ],
+        "title": "CaptureMediaRead"
+      },
+      "CaptureRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "camera": {
+            "$ref": "#/components/schemas/CameraBrief"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CaptureStatus"
+          },
+          "planned_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Planned At"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "role_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role Snapshot"
+          },
+          "priority_snapshot": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Priority Snapshot"
+          },
+          "zone_code_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Code Snapshot"
+          },
+          "snapshot_origin": {
+            "type": "string",
+            "title": "Snapshot Origin",
+            "default": "unknown"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes",
+            "description": "Размер записанного ролика",
+            "examples": [
+              2148000
+            ]
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms",
+            "description": "Длительность ролика, мс",
+            "examples": [
+              20000
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecognitionResultRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "has_video": {
+            "type": "boolean",
+            "title": "Has Video",
+            "description": "Записано ли исходное видео",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "camera",
+          "status",
+          "planned_at",
+          "attempts",
+          "size_bytes",
+          "duration_ms",
+          "error",
+          "has_video"
+        ],
+        "title": "CaptureRead"
+      },
+      "CaptureStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "claimed",
+          "recording",
+          "uploading",
+          "completed",
+          "retry_wait",
+          "failed",
+          "cancelled"
+        ],
+        "title": "CaptureStatus"
+      },
+      "ClassroomCameraAssign": {
+        "properties": {
+          "camera_id": {
+            "type": "integer",
+            "title": "Camera Id",
+            "description": "ID камеры из справочника камер"
+          },
+          "role": {
+            "$ref": "#/components/schemas/CameraRole",
+            "description": "Роль камеры в аудитории",
+            "default": "primary"
+          },
+          "priority": {
+            "type": "integer",
+            "maximum": 10,
+            "minimum": 1,
+            "title": "Priority",
+            "description": "Порядок предпочтения",
+            "default": 1
+          },
+          "zone_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Code",
+            "description": "Код зоны обзора для непересекающихся камер",
+            "examples": [
+              "left"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "camera_id"
+        ],
+        "title": "ClassroomCameraAssign"
+      },
+      "ClassroomCameraRead": {
+        "properties": {
+          "camera": {
+            "$ref": "#/components/schemas/CameraBrief"
+          },
+          "role": {
+            "$ref": "#/components/schemas/CameraRole"
+          },
+          "priority": {
+            "type": "integer",
+            "title": "Priority"
+          },
+          "zone_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zone Code"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "description": "Текущее состояние камеры"
+          }
+        },
+        "type": "object",
+        "required": [
+          "camera",
+          "role",
+          "priority",
+          "zone_code",
+          "enabled"
+        ],
+        "title": "ClassroomCameraRead"
+      },
+      "ClassroomCreate": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Number",
+            "description": "Номер или название аудитории",
+            "examples": [
+              "302"
+            ]
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity",
+            "description": "Вместимость аудитории",
+            "examples": [
+              40
+            ]
+          },
+          "aggregation_mode": {
+            "$ref": "#/components/schemas/CameraAggregationMode",
+            "description": "Как объединять результаты камер: single — одна камера, maximum — пересекающиеся зоны, sum — непересекающиеся зоны, primary_backup — основная и резервная",
+            "default": "single"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number"
+        ],
+        "title": "ClassroomCreate",
+        "example": {
+          "aggregation_mode": "single",
+          "capacity": 40,
+          "number": "302"
+        }
+      },
+      "ClassroomRead": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Number",
+            "description": "Номер или название аудитории",
+            "examples": [
+              "302"
+            ]
+          },
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity",
+            "description": "Вместимость аудитории",
+            "examples": [
+              40
+            ]
+          },
+          "aggregation_mode": {
+            "$ref": "#/components/schemas/CameraAggregationMode",
+            "description": "Как объединять результаты камер: single — одна камера, maximum — пересекающиеся зоны, sum — непересекающиеся зоны, primary_backup — основная и резервная",
+            "default": "single"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "cameras": {
+            "items": {
+              "$ref": "#/components/schemas/ClassroomCameraRead"
+            },
+            "type": "array",
+            "title": "Cameras",
+            "description": "Камеры аудитории с ролями и приоритетами"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "id"
+        ],
+        "title": "ClassroomRead"
+      },
+      "ClassroomUpdate": {
+        "properties": {
+          "capacity": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Capacity"
+          },
+          "aggregation_mode": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CameraAggregationMode"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "title": "ClassroomUpdate"
+      },
+      "CorrectionCreated": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          },
+          "people_count": {
+            "type": "integer",
+            "title": "People Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_id",
+          "people_count"
+        ],
+        "title": "CorrectionCreated"
+      },
+      "CorrectionInput": {
+        "properties": {
+          "people_count": {
+            "type": "integer",
+            "maximum": 10000,
+            "minimum": 0,
+            "title": "People Count"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "people_count",
+          "reason"
+        ],
+        "title": "CorrectionInput"
+      },
+      "CorrectionRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "job_id": {
+            "type": "integer",
+            "title": "Job Id"
+          },
+          "people_count": {
+            "type": "integer",
+            "title": "People Count"
+          },
+          "actor_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor Id"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "job_id",
+          "people_count",
+          "actor_id",
+          "reason",
+          "created_at"
+        ],
+        "title": "CorrectionRead"
+      },
+      "DisciplineCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Название дисциплины",
+            "examples": [
+              "Базы данных"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "DisciplineCreate",
+        "example": {
+          "name": "Базы данных"
+        }
+      },
+      "DisciplineRead": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Название дисциплины",
+            "examples": [
+              "Базы данных"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "id"
+        ],
+        "title": "DisciplineRead"
+      },
+      "EntityStats": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id",
+            "description": "ID выбранной сущности",
+            "examples": [
+              1
+            ]
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "description": "Название выбранной сущности",
+            "examples": [
+              "ИВТ-21"
+            ]
+          },
+          "sessions_finished": {
+            "type": "integer",
+            "title": "Sessions Finished",
+            "description": "Количество завершённых занятий",
+            "examples": [
+              32
+            ]
+          },
+          "avg_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rate",
+            "description": "Средняя посещаемость",
+            "examples": [
+              0.79
+            ]
+          },
+          "avg_detected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Detected",
+            "description": "Среднее число найденных людей",
+            "examples": [
+              22.1
+            ]
+          },
+          "records_complete": {
+            "type": "integer",
+            "title": "Records Complete",
+            "description": "Занятий с двумя успешными замерами",
+            "examples": [
+              28
+            ]
+          },
+          "records_partial": {
+            "type": "integer",
+            "title": "Records Partial",
+            "description": "Занятий с одним успешным замером",
+            "examples": [
+              3
+            ]
+          },
+          "records_failed": {
+            "type": "integer",
+            "title": "Records Failed",
+            "description": "Занятий без успешных замеров",
+            "examples": [
+              1
+            ]
+          },
+          "breakdown": {
+            "items": {
+              "$ref": "#/components/schemas/BreakdownItem"
+            },
+            "type": "array",
+            "title": "Breakdown",
+            "description": "Разбивка по связанным сущностям"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "sessions_finished",
+          "avg_rate",
+          "avg_detected",
+          "records_complete",
+          "records_partial",
+          "records_failed",
+          "breakdown"
+        ],
+        "title": "EntityStats"
+      },
+      "GroupCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Название учебной группы",
+            "examples": [
+              "ИВТ-21"
+            ]
+          },
+          "course": {
+            "type": "integer",
+            "maximum": 6,
+            "minimum": 1,
+            "title": "Course",
+            "description": "Курс обучения",
+            "default": 1,
+            "examples": [
+              2
+            ]
+          },
+          "faculty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Faculty",
+            "description": "Факультет или институт",
+            "examples": [
+              "Институт компьютерных наук"
+            ]
+          },
+          "students_count": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Students Count",
+            "description": "Численность группы для расчёта процента посещаемости",
+            "default": 0,
+            "examples": [
+              28
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "GroupCreate",
+        "example": {
+          "course": 2,
+          "faculty": "Институт компьютерных наук",
+          "name": "ИВТ-21",
+          "students_count": 28
+        }
+      },
+      "GroupRead": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Name",
+            "description": "Название учебной группы",
+            "examples": [
+              "ИВТ-21"
+            ]
+          },
+          "course": {
+            "type": "integer",
+            "maximum": 6,
+            "minimum": 1,
+            "title": "Course",
+            "description": "Курс обучения",
+            "default": 1,
+            "examples": [
+              2
+            ]
+          },
+          "faculty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Faculty",
+            "description": "Факультет или институт",
+            "examples": [
+              "Институт компьютерных наук"
+            ]
+          },
+          "students_count": {
+            "type": "integer",
+            "minimum": 0,
+            "title": "Students Count",
+            "description": "Численность группы для расчёта процента посещаемости",
+            "default": 0,
+            "examples": [
+              28
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "id"
+        ],
+        "title": "GroupRead"
+      },
+      "GroupTimeline": {
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id",
+            "description": "ID группы",
+            "examples": [
+              1
+            ]
+          },
+          "group_name": {
+            "type": "string",
+            "title": "Group Name",
+            "description": "Название группы",
+            "examples": [
+              "ИВТ-21"
+            ]
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/TimelinePoint"
+            },
+            "type": "array",
+            "title": "Points",
+            "description": "Точки временного ряда"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group_id",
+          "group_name",
+          "points"
+        ],
+        "title": "GroupTimeline"
+      },
+      "GroupUpdate": {
+        "properties": {
+          "course": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 6,
+                "minimum": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Course"
+          },
+          "faculty": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Faculty"
+          },
+          "students_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Students Count",
+            "description": "Численность группы; влияет на расчёт attendance_rate"
+          }
+        },
+        "type": "object",
+        "title": "GroupUpdate"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "HealthRead": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "title": "Status",
+            "description": "Состояние сервиса",
+            "examples": [
+              "ok"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "HealthRead"
+      },
+      "ImportPreviewRead": {
+        "properties": {
+          "preview_id": {
+            "type": "string",
+            "title": "Preview Id"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/Lesson"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preview_id",
+          "expires_at",
+          "created",
+          "skipped",
+          "errors",
+          "rows"
+        ],
+        "title": "ImportPreviewRead"
+      },
+      "Lesson": {
+        "properties": {
+          "group": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Group"
+          },
+          "discipline": {
+            "type": "string",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Discipline"
+          },
+          "teacher": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Teacher"
+          },
+          "classroom": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classroom"
+          },
+          "weekday": {
+            "type": "integer",
+            "maximum": 7,
+            "minimum": 1,
+            "title": "Weekday"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "time",
+            "title": "Starts At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "time",
+            "title": "Ends At"
+          },
+          "week_type": {
+            "$ref": "#/components/schemas/WeekType",
+            "default": "every"
+          },
+          "lesson_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lesson Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "group",
+          "discipline",
+          "weekday",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "Lesson"
+      },
+      "LoginInput": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginInput"
+      },
+      "MeasurementDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MeasurementType",
+            "description": "after_start — через 15 минут после начала, before_end — за 15 минут до конца"
+          },
+          "planned_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Planned At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MeasurementStatus"
+          },
+          "final_people_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final People Count",
+            "description": "Итог замера после объединения камер",
+            "examples": [
+              24
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Уверенность итога",
+            "examples": [
+              0.82
+            ]
+          },
+          "aggregation_method": {
+            "$ref": "#/components/schemas/CameraAggregationMode"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "source_reference_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Reference Status"
+          },
+          "source_results": {
+            "items": {
+              "$ref": "#/components/schemas/MeasurementResultSourceRead"
+            },
+            "type": "array",
+            "title": "Source Results"
+          },
+          "captures": {
+            "items": {
+              "$ref": "#/components/schemas/CaptureRead"
+            },
+            "type": "array",
+            "title": "Captures"
+          },
+          "provenance": {
+            "type": "string",
+            "title": "Provenance",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "planned_at",
+          "status",
+          "final_people_count",
+          "confidence",
+          "aggregation_method",
+          "error",
+          "captures",
+          "provenance"
+        ],
+        "title": "MeasurementDetail"
+      },
+      "MeasurementRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MeasurementType",
+            "description": "after_start — через 15 минут после начала, before_end — за 15 минут до конца"
+          },
+          "planned_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Planned At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MeasurementStatus"
+          },
+          "final_people_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final People Count",
+            "description": "Итог замера после объединения камер",
+            "examples": [
+              24
+            ]
+          },
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confidence",
+            "description": "Уверенность итога",
+            "examples": [
+              0.82
+            ]
+          },
+          "aggregation_method": {
+            "$ref": "#/components/schemas/CameraAggregationMode"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "source_reference_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Reference Status"
+          },
+          "source_results": {
+            "items": {
+              "$ref": "#/components/schemas/MeasurementResultSourceRead"
+            },
+            "type": "array",
+            "title": "Source Results"
+          },
+          "provenance": {
+            "type": "string",
+            "title": "Provenance",
+            "readOnly": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "type",
+          "planned_at",
+          "status",
+          "final_people_count",
+          "confidence",
+          "aggregation_method",
+          "error",
+          "provenance"
+        ],
+        "title": "MeasurementRead"
+      },
+      "MeasurementResultSourceRead": {
+        "properties": {
+          "recognition_result_id": {
+            "type": "integer",
+            "title": "Recognition Result Id"
+          },
+          "recognition_job_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recognition Job Id"
+          },
+          "camera_capture_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Camera Capture Id"
+          },
+          "upload_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upload Id"
+          },
+          "people_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "People Count"
+          },
+          "used_for_count": {
+            "type": "boolean",
+            "title": "Used For Count",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "recognition_result_id"
+        ],
+        "title": "MeasurementResultSourceRead"
+      },
+      "MeasurementStatus": {
+        "type": "string",
+        "enum": [
+          "scheduled",
+          "capturing",
+          "recognizing",
+          "completed",
+          "partially_completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "MeasurementStatus"
+      },
+      "MeasurementType": {
+        "type": "string",
+        "enum": [
+          "after_start",
+          "before_end"
+        ],
+        "title": "MeasurementType",
+        "description": "after_start — через 15 минут после начала; before_end — за 15 минут до конца."
+      },
+      "ParameterRange": {
+        "properties": {
+          "min": {
+            "type": "number",
+            "title": "Min"
+          },
+          "max": {
+            "type": "number",
+            "title": "Max"
+          }
+        },
+        "type": "object",
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "ParameterRange"
+      },
+      "RecognitionCapabilities": {
+        "properties": {
+          "profile": {
+            "type": "string",
+            "const": "server_inference",
+            "title": "Profile"
+          },
+          "formats": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Formats"
+          },
+          "max_size_bytes": {
+            "type": "integer",
+            "title": "Max Size Bytes"
+          },
+          "max_pixels": {
+            "type": "integer",
+            "title": "Max Pixels"
+          },
+          "max_duration_seconds": {
+            "type": "number",
+            "title": "Max Duration Seconds"
+          },
+          "max_video_dimension": {
+            "type": "integer",
+            "title": "Max Video Dimension"
+          },
+          "sample_rate_fps": {
+            "$ref": "#/components/schemas/ParameterRange"
+          },
+          "confidence": {
+            "$ref": "#/components/schemas/ParameterRange"
+          }
+        },
+        "type": "object",
+        "required": [
+          "profile",
+          "formats",
+          "max_size_bytes",
+          "max_pixels",
+          "max_duration_seconds",
+          "max_video_dimension",
+          "sample_rate_fps",
+          "confidence"
+        ],
+        "title": "RecognitionCapabilities"
+      },
+      "RecognitionEvaluationSummary": {
+        "properties": {
+          "checked_materials": {
+            "type": "integer",
+            "title": "Checked Materials",
+            "description": "Число материалов с ручным эталоном"
+          },
+          "within_tolerance_count": {
+            "type": "integer",
+            "title": "Within Tolerance Count",
+            "description": "Число результатов в допустимой ошибке"
+          },
+          "mean_absolute_error": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Absolute Error",
+            "description": "Средняя абсолютная ошибка"
+          },
+          "median_absolute_error": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median Absolute Error",
+            "description": "Медианная абсолютная ошибка"
+          },
+          "max_absolute_error": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Absolute Error",
+            "description": "Максимальная абсолютная ошибка"
+          },
+          "mean_relative_error": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean Relative Error",
+            "description": "Средняя относительная ошибка"
+          }
+        },
+        "type": "object",
+        "required": [
+          "checked_materials",
+          "within_tolerance_count",
+          "mean_absolute_error",
+          "median_absolute_error",
+          "max_absolute_error",
+          "mean_relative_error"
+        ],
+        "title": "RecognitionEvaluationSummary"
+      },
+      "RecognitionHistoryRead": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/RecognitionUploadJobRead"
+            },
+            "type": "array",
+            "title": "Jobs"
+          },
+          "corrections": {
+            "items": {
+              "$ref": "#/components/schemas/CorrectionRead"
+            },
+            "type": "array",
+            "title": "Corrections"
+          }
+        },
+        "type": "object",
+        "required": [
+          "jobs",
+          "corrections"
+        ],
+        "title": "RecognitionHistoryRead"
+      },
+      "RecognitionMediaType": {
+        "type": "string",
+        "enum": [
+          "image",
+          "video"
+        ],
+        "title": "RecognitionMediaType",
+        "description": "Тип входного файла для самостоятельного задания распознавания."
+      },
+      "RecognitionResultRead": {
+        "properties": {
+          "people_count": {
+            "type": "integer",
+            "title": "People Count",
+            "description": "Итоговое количество людей на ролике",
+            "examples": [
+              24
+            ]
+          },
+          "inference_metadata": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inference Metadata"
+          },
+          "detected_median": {
+            "type": "number",
+            "title": "Detected Median",
+            "description": "Медиана по кадрам",
+            "examples": [
+              24
+            ]
+          },
+          "detected_percentile_75": {
+            "type": "number",
+            "title": "Detected Percentile 75",
+            "description": "75-й перцентиль по кадрам",
+            "examples": [
+              25
+            ]
+          },
+          "detected_max": {
+            "type": "integer",
+            "title": "Detected Max",
+            "description": "Максимум по кадрам",
+            "examples": [
+              26
+            ]
+          },
+          "average_confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Confidence",
+            "description": "Средняя уверенность детектора",
+            "examples": [
+              0.82
+            ]
+          },
+          "count_stddev": {
+            "type": "number",
+            "title": "Count Stddev",
+            "description": "Стандартное отклонение числа людей по кадрам",
+            "examples": [
+              0.5
+            ]
+          },
+          "sampled_frames": {
+            "type": "integer",
+            "title": "Sampled Frames",
+            "description": "Число проанализированных кадров",
+            "examples": [
+              20
+            ]
+          },
+          "source_frames": {
+            "type": "integer",
+            "title": "Source Frames",
+            "description": "Число кадров в исходном видео",
+            "examples": [
+              750
+            ]
+          },
+          "source_duration_ms": {
+            "type": "integer",
+            "title": "Source Duration Ms",
+            "description": "Длительность исходного видео, мс",
+            "examples": [
+              30000
+            ]
+          },
+          "representative_frame_ms": {
+            "type": "integer",
+            "title": "Representative Frame Ms",
+            "description": "Позиция репрезентативного кадра в ролике, мс",
+            "examples": [
+              9500
+            ]
+          },
+          "absolute_error": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Absolute Error",
+            "description": "Абсолютная ошибка относительно ручного эталона",
+            "examples": [
+              1
+            ]
+          },
+          "relative_error": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Relative Error",
+            "description": "Относительная ошибка относительно ручного эталона",
+            "examples": [
+              0.04
+            ]
+          },
+          "within_tolerance": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Within Tolerance",
+            "description": "Укладывается ли ошибка в допустимое число человек"
+          },
+          "media_expires_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Expires At",
+            "description": "Когда размеченный кадр будет удалён по сроку хранения"
+          }
+        },
+        "type": "object",
+        "required": [
+          "people_count",
+          "detected_median",
+          "detected_percentile_75",
+          "detected_max",
+          "average_confidence",
+          "count_stddev",
+          "sampled_frames",
+          "source_frames",
+          "source_duration_ms",
+          "representative_frame_ms",
+          "absolute_error",
+          "relative_error",
+          "within_tolerance",
+          "media_expires_at"
+        ],
+        "title": "RecognitionResultRead"
+      },
+      "RecognitionStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "processing",
+          "retry_wait",
+          "completed",
+          "failed",
+          "cancelled"
+        ],
+        "title": "RecognitionStatus"
+      },
+      "RecognitionUploadJobRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RecognitionStatus"
+          },
+          "attempts": {
+            "type": "integer",
+            "title": "Attempts"
+          },
+          "model_name": {
+            "type": "string",
+            "title": "Model Name"
+          },
+          "model_version": {
+            "type": "string",
+            "title": "Model Version"
+          },
+          "sample_rate_fps": {
+            "type": "number",
+            "title": "Sample Rate Fps",
+            "description": "Частота выборки кадров у видео",
+            "examples": [
+              1
+            ]
+          },
+          "confidence_threshold": {
+            "type": "number",
+            "title": "Confidence Threshold",
+            "description": "Минимальная уверенность детектора",
+            "examples": [
+              0.35
+            ]
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecognitionResultRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "status",
+          "attempts",
+          "model_name",
+          "model_version",
+          "sample_rate_fps",
+          "confidence_threshold",
+          "started_at",
+          "finished_at",
+          "error"
+        ],
+        "title": "RecognitionUploadJobRead"
+      },
+      "RecognitionUploadMediaRead": {
+        "properties": {
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url",
+            "description": "Временная ссылка на загруженный исходный файл"
+          },
+          "source_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Unavailable Reason"
+          },
+          "annotated_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotated Url",
+            "description": "Временная ссылка на размеченный кадр"
+          },
+          "annotated_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Annotated Unavailable Reason"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "title": "Expires In Seconds",
+            "description": "Срок действия выданных ссылок",
+            "examples": [
+              900
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "source_url",
+          "source_unavailable_reason",
+          "annotated_url",
+          "annotated_unavailable_reason",
+          "expires_in_seconds"
+        ],
+        "title": "RecognitionUploadMediaRead"
+      },
+      "RecognitionUploadRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "session_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
+          "measurement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measurement Id"
+          },
+          "provenance": {
+            "type": "string",
+            "title": "Provenance",
+            "default": "server_inference"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "media_type": {
+            "$ref": "#/components/schemas/RecognitionMediaType"
+          },
+          "content_type": {
+            "type": "string",
+            "title": "Content Type"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "title": "Size Bytes"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label",
+            "description": "Краткое название проверочного материала"
+          },
+          "reference_people_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference People Count",
+            "description": "Ручной эталон для расчёта ошибки",
+            "examples": [
+              8
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "job": {
+            "$ref": "#/components/schemas/RecognitionUploadJobRead"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "filename",
+          "media_type",
+          "content_type",
+          "size_bytes",
+          "label",
+          "reference_people_count",
+          "created_at",
+          "job"
+        ],
+        "title": "RecognitionUploadRead"
+      },
+      "ScheduleCreate": {
+        "properties": {
+          "group_id": {
+            "type": "integer",
+            "title": "Group Id",
+            "description": "ID учебной группы",
+            "examples": [
+              1
+            ]
+          },
+          "teacher_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Teacher Id",
+            "description": "ID преподавателя. Может отсутствовать в исходном расписании.",
+            "examples": [
+              1
+            ]
+          },
+          "discipline_id": {
+            "type": "integer",
+            "title": "Discipline Id",
+            "description": "ID дисциплины",
+            "examples": [
+              1
+            ]
+          },
+          "classroom_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Classroom Id",
+            "description": "ID аудитории. Если аудитория не указана, запуск камеры невозможен.",
+            "examples": [
+              1
+            ]
+          },
+          "weekday": {
+            "type": "integer",
+            "maximum": 7,
+            "minimum": 1,
+            "title": "Weekday",
+            "description": "ISO-день недели: 1 — понедельник, 7 — воскресенье",
+            "examples": [
+              1
+            ]
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "time",
+            "title": "Starts At",
+            "description": "Время начала занятия",
+            "examples": [
+              "09:00:00"
+            ]
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "time",
+            "title": "Ends At",
+            "description": "Время окончания занятия",
+            "examples": [
+              "10:30:00"
+            ]
+          },
+          "week_type": {
+            "$ref": "#/components/schemas/WeekType",
+            "description": "Тип недели: каждую неделю, белая или зелёная",
+            "default": "every"
+          },
+          "lesson_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lesson Type",
+            "description": "Тип занятия из расписания: лек., пр., лаб.",
+            "examples": [
+              "лек."
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "group_id",
+          "discipline_id",
+          "weekday",
+          "starts_at",
+          "ends_at"
+        ],
+        "title": "ScheduleCreate",
+        "example": {
+          "classroom_id": 1,
+          "discipline_id": 1,
+          "ends_at": "10:30:00",
+          "group_id": 1,
+          "lesson_type": "лек.",
+          "starts_at": "09:00:00",
+          "teacher_id": 1,
+          "week_type": "every",
+          "weekday": 1
+        }
+      },
+      "ScheduleImportResult": {
+        "properties": {
+          "created": {
+            "type": "integer",
+            "title": "Created",
+            "description": "Количество созданных записей расписания",
+            "examples": [
+              42
+            ]
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "description": "Количество пропущенных дублей",
+            "examples": [
+              3
+            ]
+          },
+          "errors": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Errors",
+            "description": "Ошибки по строкам или ячейкам, которые не удалось импортировать",
+            "examples": [
+              [
+                "Строка 8: не указана дисциплина"
+              ]
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "skipped",
+          "errors"
+        ],
+        "title": "ScheduleImportResult"
+      },
+      "ScheduleRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "weekday": {
+            "type": "integer",
+            "title": "Weekday"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "time",
+            "title": "Starts At"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "time",
+            "title": "Ends At"
+          },
+          "week_type": {
+            "$ref": "#/components/schemas/WeekType"
+          },
+          "lesson_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lesson Type"
+          },
+          "group": {
+            "$ref": "#/components/schemas/GroupRead"
+          },
+          "teacher": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TeacherRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discipline": {
+            "$ref": "#/components/schemas/DisciplineRead"
+          },
+          "classroom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClassroomRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "weekday",
+          "starts_at",
+          "ends_at",
+          "week_type",
+          "lesson_type",
+          "group",
+          "teacher",
+          "discipline",
+          "classroom"
+        ],
+        "title": "ScheduleRead"
+      },
+      "SessionDetail": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ScheduleRead"
+          },
+          "attendance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttendanceRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "measurements": {
+            "items": {
+              "$ref": "#/components/schemas/MeasurementDetail"
+            },
+            "type": "array",
+            "title": "Measurements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "status",
+          "started_at",
+          "finished_at",
+          "schedule"
+        ],
+        "title": "SessionDetail"
+      },
+      "SessionStatus": {
+        "type": "string",
+        "enum": [
+          "scheduled",
+          "in_progress",
+          "finished",
+          "cancelled"
+        ],
+        "title": "SessionStatus"
+      },
+      "SummaryStats": {
+        "properties": {
+          "groups": {
+            "type": "integer",
+            "title": "Groups",
+            "description": "Количество групп",
+            "examples": [
+              12
+            ]
+          },
+          "teachers": {
+            "type": "integer",
+            "title": "Teachers",
+            "description": "Количество преподавателей",
+            "examples": [
+              24
+            ]
+          },
+          "disciplines": {
+            "type": "integer",
+            "title": "Disciplines",
+            "description": "Количество дисциплин",
+            "examples": [
+              18
+            ]
+          },
+          "classrooms": {
+            "type": "integer",
+            "title": "Classrooms",
+            "description": "Количество аудиторий",
+            "examples": [
+              10
+            ]
+          },
+          "cameras": {
+            "type": "integer",
+            "title": "Cameras",
+            "description": "Количество камер",
+            "examples": [
+              14
+            ]
+          },
+          "sessions_total": {
+            "type": "integer",
+            "title": "Sessions Total",
+            "description": "Всего сформированных занятий",
+            "examples": [
+              120
+            ]
+          },
+          "sessions_today": {
+            "type": "integer",
+            "title": "Sessions Today",
+            "description": "Занятий на текущую дату",
+            "examples": [
+              8
+            ]
+          },
+          "sessions_finished": {
+            "type": "integer",
+            "title": "Sessions Finished",
+            "description": "Завершённых занятий",
+            "examples": [
+              56
+            ]
+          },
+          "avg_attendance_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Attendance Rate",
+            "description": "Средняя посещаемость по завершённым занятиям",
+            "examples": [
+              0.81
+            ]
+          },
+          "records_complete": {
+            "type": "integer",
+            "title": "Records Complete",
+            "description": "Занятий с двумя успешными замерами",
+            "examples": [
+              48
+            ]
+          },
+          "records_partial": {
+            "type": "integer",
+            "title": "Records Partial",
+            "description": "Занятий с одним успешным замером",
+            "examples": [
+              6
+            ]
+          },
+          "records_failed": {
+            "type": "integer",
+            "title": "Records Failed",
+            "description": "Занятий без успешных замеров",
+            "examples": [
+              2
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "groups",
+          "teachers",
+          "disciplines",
+          "classrooms",
+          "cameras",
+          "sessions_total",
+          "sessions_today",
+          "sessions_finished",
+          "avg_attendance_rate",
+          "records_complete",
+          "records_partial",
+          "records_failed"
+        ],
+        "title": "SummaryStats"
+      },
+      "SystemRead": {
+        "properties": {
+          "database": {
+            "type": "string",
+            "const": "ready",
+            "title": "Database"
+          },
+          "storage": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "unavailable"
+            ],
+            "title": "Storage"
+          },
+          "recognition_queue": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Recognition Queue"
+          },
+          "last_job_heartbeat": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Job Heartbeat"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "environment": {
+            "type": "string",
+            "title": "Environment"
+          },
+          "camera_enabled": {
+            "type": "boolean",
+            "title": "Camera Enabled"
+          },
+          "backup_status": {
+            "type": "string",
+            "const": "not_verified",
+            "title": "Backup Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "database",
+          "storage",
+          "recognition_queue",
+          "last_job_heartbeat",
+          "timezone",
+          "environment",
+          "camera_enabled",
+          "backup_status"
+        ],
+        "title": "SystemRead"
+      },
+      "TeacherCreate": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Full Name",
+            "description": "ФИО преподавателя",
+            "examples": [
+              "Иванов Иван Иванович"
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "Контактный email преподавателя",
+            "examples": [
+              "ivanov@example.edu"
+            ]
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department",
+            "description": "Кафедра или подразделение",
+            "examples": [
+              "Кафедра информационных систем"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name"
+        ],
+        "title": "TeacherCreate",
+        "example": {
+          "department": "Кафедра информационных систем",
+          "email": "ivanov@example.edu",
+          "full_name": "Иванов Иван Иванович"
+        }
+      },
+      "TeacherRead": {
+        "properties": {
+          "full_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Full Name",
+            "description": "ФИО преподавателя",
+            "examples": [
+              "Иванов Иван Иванович"
+            ]
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "Контактный email преподавателя",
+            "examples": [
+              "ivanov@example.edu"
+            ]
+          },
+          "department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department",
+            "description": "Кафедра или подразделение",
+            "examples": [
+              "Кафедра информационных систем"
+            ]
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "full_name",
+          "id"
+        ],
+        "title": "TeacherRead"
+      },
+      "TimelinePoint": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date",
+            "description": "Дата занятий",
+            "examples": [
+              "2026-07-04"
+            ]
+          },
+          "avg_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Rate",
+            "description": "Средняя посещаемость за дату",
+            "examples": [
+              0.86
+            ]
+          },
+          "avg_detected": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Detected",
+            "description": "Среднее число найденных людей за дату",
+            "examples": [
+              24.2
+            ]
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected",
+            "description": "Ожидаемая численность группы",
+            "examples": [
+              28
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "avg_rate",
+          "avg_detected",
+          "expected"
+        ],
+        "title": "TimelinePoint"
+      },
+      "UserInput": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1,
+            "pattern": "^[a-zA-Z0-9._-]+$",
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 12,
+            "title": "Password"
+          },
+          "role": {
+            "type": "string",
+            "pattern": "^(admin|operator|teacher|analyst)$",
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password",
+          "role"
+        ],
+        "title": "UserInput"
+      },
+      "UserRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "operator",
+              "teacher",
+              "analyst"
+            ],
+            "title": "Role"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "role",
+          "enabled"
+        ],
+        "title": "UserRead"
+      },
+      "UserUpdate": {
+        "properties": {
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(admin|operator|teacher|analyst)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 256,
+                "minLength": 12
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          },
+          "group_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array",
+                "maxItems": 1000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Ids"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 3,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "UserUpdate"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "WeekType": {
+        "type": "string",
+        "enum": [
+          "every",
+          "white",
+          "green"
+        ],
+        "title": "WeekType",
+        "description": "Чередование недель: пара идёт каждую неделю, только по белым или только по зелёным."
+      },
+      "WeekTypeRead": {
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date",
+            "description": "Дата проверки",
+            "examples": [
+              "2026-02-09"
+            ]
+          },
+          "week_type": {
+            "$ref": "#/components/schemas/WeekType",
+            "description": "Тип учебной недели"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "week_type"
+        ],
+        "title": "WeekTypeRead"
+      },
+      "app__api__v1__auth__SessionRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "operator",
+              "teacher",
+              "analyst"
+            ],
+            "title": "Role"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "csrf_token": {
+            "type": "string",
+            "title": "Csrf Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "role",
+          "enabled",
+          "csrf_token"
+        ],
+        "title": "SessionRead"
+      },
+      "app__schemas__session__SessionRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SessionStatus"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/ScheduleRead"
+          },
+          "attendance": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AttendanceRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "measurements": {
+            "items": {
+              "$ref": "#/components/schemas/MeasurementRead"
+            },
+            "type": "array",
+            "title": "Measurements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "date",
+          "status",
+          "started_at",
+          "finished_at",
+          "schedule"
+        ],
+        "title": "SessionRead"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyCookie": {
+        "type": "apiKey",
+        "description": "HttpOnly cookie, установленная POST /auth/login. Для изменений нужен X-CSRF-Token.",
+        "in": "cookie",
+        "name": "attendance_session"
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "Служебное",
+      "description": "Проверка состояния backend-сервиса."
+    },
+    {
+      "name": "Справочники",
+      "description": "Группы, преподаватели, дисциплины и аудитории с режимом объединения камер."
+    },
+    {
+      "name": "Камеры",
+      "description": "Справочник камер и привязка камер к аудиториям."
+    },
+    {
+      "name": "Распознавание",
+      "description": "Загрузка видео и изображений, очередь обработки и результаты без подключения к камерам."
+    },
+    {
+      "name": "Расписание",
+      "description": "Загрузка Excel-расписания, ручное управление занятиями в сетке и расчёт типа недели."
+    },
+    {
+      "name": "Занятия",
+      "description": "Занятия на дату, состояние двух замеров каждой камеры и итог посещаемости."
+    },
+    {
+      "name": "Медиа",
+      "description": "Временные presigned-ссылки MinIO на исходные ролики и размеченные кадры."
+    },
+    {
+      "name": "Статистика",
+      "description": "Агрегированные метрики посещаемости для дашборда frontend-приложения."
+    }
+  ]
+}

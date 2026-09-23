@@ -94,6 +94,7 @@ export type CaptureStatus =
 export type CalculationStatus = 'complete' | 'partial' | 'failed'
 
 export interface RecognitionResult {
+  provenance?: 'demo_fixture' | 'browser_inference' | 'server_inference'
   people_count: number
   detected_median: number
   detected_percentile_75: number
@@ -135,6 +136,7 @@ export interface RecognitionUploadJob {
 }
 
 export interface RecognitionUpload {
+  provenance?: 'demo_fixture' | 'browser_inference' | 'server_inference'
   id: number
   filename: string
   media_type: RecognitionMediaType
@@ -177,6 +179,7 @@ export interface Capture {
 }
 
 export interface Measurement {
+  provenance?: 'demo_fixture' | 'browser_inference' | 'server_inference'
   id: number
   type: MeasurementType
   planned_at: string
@@ -203,6 +206,7 @@ export interface Attendance {
 }
 
 export interface Session {
+  provenance?: 'demo_fixture' | 'browser_inference' | 'server_inference'
   id: number
   date: string
   status: SessionStatus
@@ -277,4 +281,14 @@ export interface ImportResult {
   created: number
   skipped: number
   errors: string[]
+}
+
+export interface ImportPreview extends ImportResult {
+  preview_id: string
+  expires_at: string
+  rows: { group: string; discipline: string; teacher: string | null; classroom: string | null; weekday: number; starts_at: string; ends_at: string; week_type: string; lesson_type: string | null }[]
+}
+export interface RecognitionHistory {
+  jobs: RecognitionUploadJob[]
+  corrections: { id: number; job_id: number; actor_id: number | null; people_count: number; reason: string; created_at: string }[]
 }

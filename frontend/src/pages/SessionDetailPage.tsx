@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { api } from '../api/client'
+import { Link, useLocation, useParams } from 'react-router-dom'
+import { useSession } from '../auth/SessionProvider'
+import { mayOperate } from '../auth/permissions'
+import { ProvenanceBadge } from '../components/Provenance'
+import { api, isStaticData } from '../api/client'
 import type { Capture, CaptureMedia, MeasurementDetail, SessionDetail } from '../api/types'
 import { IconExternal } from '../components/icons'
 import { RateCell } from '../components/RateCell'
@@ -24,18 +27,20 @@ const MEASUREMENT_TITLES: Record<string, { title: string; note: string }> = {
 const ACTIVE_MEASUREMENT = new Set(['scheduled', 'capturing', 'recognizing'])
 
 function CaptureBlock({ capture }: { capture: Capture }) {
+  const { user } = useSession()
+  const mayReadMedia = !!user && mayOperate(user.role)
   const [media, setMedia] = useState<CaptureMedia | null>(null)
   const requested = useRef(false)
 
   useEffect(() => {
-    if (capture.result && !requested.current) {
+    if (mayReadMedia && capture.result && !requested.current) {
       requested.current = true
       api
         .getCaptureMedia(capture.id)
         .then(setMedia)
         .catch(() => setMedia(null))
     }
-  }, [capture.result, capture.id])
+  }, [capture.result, capture.id, mayReadMedia])
 
   const openVideo = async () => {
     // Ссылка временная, поэтому запрашивается свежая на момент клика
@@ -47,6 +52,7 @@ function CaptureBlock({ capture }: { capture: Capture }) {
   return (
     <div className="capture">
       <div className="capture__head">
+        {capture.result && <ProvenanceBadge source={capture.result.provenance} />}
         <span className="capture__camera">{capture.camera.name}</span>
         <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
           {capture.attempts > 1 && (
@@ -141,6 +147,7 @@ function MeasurementCard({ measurement }: { measurement: MeasurementDetail }) {
       <div className="measurement-card__planned">
         {titles.note} · план {fmtClock(measurement.planned_at)}
       </div>
+      <ProvenanceBadge source={measurement.provenance} />
 
       {measurement.final_people_count !== null && (
         <div className="measurement-card__total">
@@ -170,6 +177,8 @@ function MeasurementCard({ measurement }: { measurement: MeasurementDetail }) {
 }
 
 export function SessionDetailPage() {
+  const { user } = useSession()
+  const location = useLocation()
   const { id } = useParams()
   const sessionId = Number(id)
   const [session, setSession] = useState<SessionDetail | null>(null)
@@ -179,7 +188,7 @@ export function SessionDetailPage() {
   const load = useCallback(() => {
     api
       .getSession(sessionId)
-      .then(setSession)
+      .then(data => { setSession(data); setError(null) })
       .catch((e: Error) => setError(e.message))
   }, [sessionId])
 
@@ -211,16 +220,16 @@ export function SessionDetailPage() {
     }
   }
 
-  if (error) return <div className="alert alert--error">{error}</div>
+  if (error) return <div className="alert alert--error" role="alert">{error}<button className="btn btn--ghost" onClick={load}>Повторить</button></div>
   if (!session) return <div className="loading">Загрузка…</div>
 
   const { schedule, attendance } = session
-  const canCancel = session.status === 'scheduled' || session.status === 'in_progress'
+  const canCancel = !!user && mayOperate(user.role) && (session.status === 'scheduled' || session.status === 'in_progress')
 
   return (
     <>
       <div className="breadcrumbs">
-        <Link to={`/sessions?date=${session.date}`}>Занятия</Link>
+        <Link to={(location.state as { from?: string } | null)?.from ?? `/sessions?date=${session.date}`}>Занятия</Link>
         {' / '}
         {fmtDateHuman(session.date)}
       </div>
@@ -276,6 +285,9 @@ export function SessionDetailPage() {
           </button>
         )}
       </header>
+      <ProvenanceBadge source={session.provenance} />
+      {!isStaticData && user && mayOperate(user.role) && <Link className="btn btn--ghost" to={`/recognition?session_id=${session.id}`}>Загрузить материал занятия</Link>}
+      <p className="metric-note">Оценка людей в кадре, не идентификация студентов. Уверенность детектора не является точностью подсчёта.</p>
 
       {attendance && (
         <div className="grid grid--stats section">

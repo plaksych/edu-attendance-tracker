@@ -1,0 +1,5 @@
+dist-demo/
+test-results/
+playwright-report/
+*.tsbuildinfo
+IMPLEMENTATION.md
