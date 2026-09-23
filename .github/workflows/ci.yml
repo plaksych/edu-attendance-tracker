@@ -7,7 +7,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   operations:
@@ -122,7 +122,7 @@ jobs:
         with: {name: frontend-demo, path: frontend/dist-demo, if-no-files-found: error, retention-days: 14}
       - run: npm run test:e2e
         working-directory: frontend
-        env: {CI: 'true', VITE_STATIC_DATA: 'true'}
+        env: {CI: 'true'}
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
@@ -141,6 +141,10 @@ jobs:
         with: {fetch-depth: 0, persist-credentials: false}
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env: {GITHUB_TOKEN: '${{ github.token }}'}
+      - name: Install checksum-pinned security scanner
+        run: |
+          python3 scripts/ops/install_trivy.py "$RUNNER_TEMP/trivy-bin"
+          echo "$RUNNER_TEMP/trivy-bin" >> "$GITHUB_PATH"
       - uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8 # v0.33.1
         with:
           scan-type: fs
@@ -148,14 +152,14 @@ jobs:
           scanners: vuln,secret,misconfig
           severity: HIGH,CRITICAL
           exit-code: '1'
-          version: v0.61.1
+          skip-setup-trivy: 'true'
       - uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
         with:
           scan-type: fs
           scan-ref: .
           format: cyclonedx
           output: sbom.cdx.json
-          version: v0.61.1
+          skip-setup-trivy: 'true'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with: {name: source-sbom, path: sbom.cdx.json, if-no-files-found: error}
 
@@ -183,12 +187,16 @@ jobs:
           port=$(docker port "$container" 8080 | cut -d: -f2)
           curl --fail --retry 10 --retry-connrefused --retry-delay 1 "http://127.0.0.1:${port}/" > /dev/null
           python3 scripts/check_static_http.py "http://127.0.0.1:${port}"
+      - name: Install checksum-pinned security scanner
+        run: |
+          python3 scripts/ops/install_trivy.py "$RUNNER_TEMP/trivy-bin"
+          echo "$RUNNER_TEMP/trivy-bin" >> "$GITHUB_PATH"
       - uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
         with:
           image-ref: attendance-${{ matrix.service }}:${{ github.sha }}
           severity: HIGH,CRITICAL
           exit-code: '1'
-          version: v0.61.1
+          skip-setup-trivy: 'true'
       - name: Inventory licenses
         uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
         with:
@@ -196,14 +204,14 @@ jobs:
           scanners: license
           format: json
           output: licenses.json
-          version: v0.61.1
+          skip-setup-trivy: 'true'
       - run: python3 scripts/check_licenses.py licenses.json
       - uses: aquasecurity/trivy-action@b6643a29fecd7f34b3597bc6acb0a98b03d33ff8
         with:
           image-ref: attendance-${{ matrix.service }}:${{ github.sha }}
           format: cyclonedx
           output: container-sbom.cdx.json
-          version: v0.61.1
+          skip-setup-trivy: 'true'
       - name: Save the tested bytes, never rebuild during deployment
         run: |
           docker save 'attendance-${{ matrix.service }}:${{ github.sha }}' | gzip > image.tar.gz

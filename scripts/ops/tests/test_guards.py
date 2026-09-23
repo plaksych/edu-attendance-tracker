@@ -16,9 +16,53 @@ from common import compose_args, compose_environment, read_env, validate_env  # 
 from data import pg_environment, restic_environment, validate_target  # noqa: E402
 from manage import confirm  # noqa: E402
 from tasks import python as service_python  # noqa: E402
+import install_trivy  # noqa: E402
 
 
 class EnvironmentTests(unittest.TestCase):
+    def test_scanner_checksum_failure_writes_nothing(self):
+        import io
+
+        with tempfile.TemporaryDirectory() as folder:
+            destination = Path(folder) / "bin"
+            with patch.object(
+                install_trivy, "urlopen", return_value=io.BytesIO(b"invalid")
+            ):
+                with self.assertRaisesRegex(ValueError, "checksum"):
+                    install_trivy.install(destination)
+            self.assertFalse(destination.exists())
+
+    def test_scanner_installs_only_regular_pinned_binary(self):
+        import hashlib
+        import io
+        import tarfile
+
+        for regular in (True, False):
+            buffer = io.BytesIO()
+            with tarfile.open(fileobj=buffer, mode="w:gz") as archive:
+                member = tarfile.TarInfo("trivy")
+                if regular:
+                    member.size = 4
+                    archive.addfile(member, io.BytesIO(b"test"))
+                else:
+                    member.type = tarfile.SYMTYPE
+                    member.linkname = "/tmp/untrusted-scanner-target"
+                    archive.addfile(member)
+            data = buffer.getvalue()
+            with (
+                tempfile.TemporaryDirectory() as folder,
+                patch.object(install_trivy, "urlopen", return_value=io.BytesIO(data)),
+                patch.object(install_trivy, "SHA256", hashlib.sha256(data).hexdigest()),
+            ):
+                target = Path(folder) / "bin"
+                if regular:
+                    install_trivy.install(target)
+                    self.assertEqual((target / "trivy").read_bytes(), b"test")
+                else:
+                    with self.assertRaisesRegex(ValueError, "archive member"):
+                        install_trivy.install(target)
+                    self.assertFalse(target.exists())
+
     def test_frontend_runtime_assets_do_not_fall_back_to_spa(self):
         import re
 
