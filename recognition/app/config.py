@@ -11,25 +11,38 @@ def _default_worker_id() -> str:
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=None if os.environ.get("WORKER_CHILD") == "1" else ".env",
+        extra="ignore",
+    )
 
     database_url: str = "postgresql://attendance:attendance@localhost:5432/attendance"
 
     # Идентификатор воркера в очереди уникален для процесса и контейнера
     worker_id: str = Field(default_factory=_default_worker_id)
 
-    poll_interval_seconds: int = 5
-    lease_minutes: int = 30
-    heartbeat_interval_seconds: int = 60
-    max_attempts: int = 3
-    retry_delay_seconds: int = 120
+    poll_interval_seconds: int = Field(default=5, ge=1)
+    lease_minutes: int = Field(default=5, ge=1)
+    heartbeat_interval_seconds: int = Field(default=20, ge=1, le=30)
+    max_attempts: int = Field(default=3, ge=1, le=100)
+    retry_delay_seconds: int = Field(default=30, ge=1)
+    retry_max_delay_seconds: int = Field(default=900, ge=1)
 
-    # Веса модели: файл или имя из зоопарка ultralytics (скачается автоматически)
-    model_path: str = "yolov8n.pt"
+    # Provision a trusted local file; missing/mismatched weights fail closed.
+    model_path: str = "/models/yolov8n.pt"
+    model_sha256: str = ""
+    job_timeout_seconds: int = Field(default=300, ge=1, le=3600)
+    cpu_limit_seconds: int = Field(default=240, ge=1)
+    memory_limit_mb: int = Field(default=4096, ge=256)
+    max_file_size_mb: int = Field(default=512, ge=1)
+    max_image_pixels: int = Field(default=20_000_000, ge=1)
+    max_video_frames: int = Field(default=18000, ge=1)
+    max_video_duration_seconds: int = Field(default=600, ge=1)
+    max_decoded_bytes: int = Field(default=4_000_000_000, ge=1)
     inference_image_size: int = 960
     inference_iou_threshold: float = 0.5
     inference_max_detections: int = 300
-    max_sampled_frames: int = Field(default=180, ge=1)
+    max_sampled_frames: int = Field(default=180, ge=1, le=1800)
     evaluation_tolerance_people: int = Field(default=1, ge=0)
 
     # Сколько дней доступен размеченный кадр

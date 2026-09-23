@@ -15,7 +15,8 @@ import cv2
 from app.config import settings
 from app.db import ClaimedJob, SourceContext
 from app.detector import Detection, PersonDetector
-from app.media_keys import annotated_camera_object_key, annotated_upload_object_key
+from app.media_keys import annotated_object_key
+from app.media_safety import validate_image, normalize_video
 from app.metrics import calculate_count_metrics
 
 logger = logging.getLogger(__name__)
@@ -50,6 +51,7 @@ class ProcessingResult:
     within_tolerance: bool | None
     annotated_bucket: str
     annotated_object_key: str
+    inference_metadata: dict
 
 
 class JobProcessor:
@@ -66,9 +68,13 @@ class JobProcessor:
             self._storage.download(
                 context.original_bucket, context.original_object_key or "", source_path
             )
+            if os.path.getsize(source_path) > settings.max_file_size_mb * 1024 * 1024:
+                raise ProcessingError("input_size_limit")
             if context.media_type == "image":
+                validate_image(source_path)
                 return self._process_image(job, context, source_path, tmp_dir)
             if context.media_type == "video":
+                source_path = normalize_video(source_path, tmp_dir)
                 return self._process_video(job, context, source_path, tmp_dir)
             raise ProcessingError("неподдерживаемый тип входного файла")
         finally:
@@ -93,12 +99,14 @@ class JobProcessor:
             raise ProcessingError("не удалось открыть изображение")
 
         detection = self._detector.detect(frame, job.confidence_threshold)
-        object_key = self._annotated_key(context)
+        object_key = annotated_object_key(job.id, job.attempts, job.claim_token)
         self._store_annotated(tmp_dir, detection, object_key)
 
         count = detection.person_count
         metrics = calculate_count_metrics(
-            [count], context.reference_people_count, settings.evaluation_tolerance_people
+            [count],
+            context.reference_people_count,
+            settings.evaluation_tolerance_people,
         )
         return ProcessingResult(
             people_count=count,
@@ -120,6 +128,7 @@ class JobProcessor:
             within_tolerance=metrics.within_tolerance,
             annotated_bucket=settings.minio_bucket,
             annotated_object_key=object_key,
+            inference_metadata=self._metadata(job),
         )
 
     def _process_video(
@@ -147,6 +156,8 @@ class JobProcessor:
             samples, confidences, total_frames = self._scan(
                 cap, step, job.confidence_threshold
             )
+            if total_frames / fps > settings.max_video_duration_seconds:
+                raise ProcessingError("video_duration_limit")
             if not samples:
                 raise ProcessingError("не удалось прочитать кадры видео")
 
@@ -154,14 +165,16 @@ class JobProcessor:
             median = float(statistics.median(counts))
             people_count = round(median)
             metrics = calculate_count_metrics(
-                counts, context.reference_people_count, settings.evaluation_tolerance_people
+                counts,
+                context.reference_people_count,
+                settings.evaluation_tolerance_people,
             )
             best_index = self._representative_frame(samples, people_count, total_frames)
             detection = self._render_annotated(
                 cap, best_index, job.confidence_threshold
             )
 
-            object_key = self._annotated_key(context)
+            object_key = annotated_object_key(job.id, job.attempts, job.claim_token)
             self._store_annotated(tmp_dir, detection, object_key)
             logger.info(
                 "Задание %s: кадров %s, людей %s (медиана %.1f, максимум %s)",
@@ -189,20 +202,20 @@ class JobProcessor:
                 within_tolerance=metrics.within_tolerance,
                 annotated_bucket=settings.minio_bucket,
                 annotated_object_key=object_key,
+                inference_metadata=self._metadata(job),
             )
         finally:
             cap.release()
 
-    def _annotated_key(self, context: SourceContext) -> str:
-        if context.source_kind == "upload":
-            if context.upload_id is None:
-                raise ProcessingError("для загруженного файла не указан идентификатор")
-            return annotated_upload_object_key(context.upload_id)
-        if None in (context.session_id, context.measurement_id, context.camera_id):
-            raise ProcessingError("для записи камеры не хватает контекста")
-        return annotated_camera_object_key(
-            context.session_id, context.measurement_id, context.camera_id
-        )
+    def _metadata(self, job: ClaimedJob) -> dict:
+        return {
+            **self._detector.metadata,
+            "confidence_threshold": job.confidence_threshold,
+            "sample_rate_fps": job.sample_rate_fps,
+            "attempt": job.attempts,
+            "claim_token": job.claim_token,
+            "max_sampled_frames": settings.max_sampled_frames,
+        }
 
     def _store_annotated(
         self, tmp_dir: str, detection: Detection, object_key: str
@@ -224,11 +237,19 @@ class JobProcessor:
         samples: list[tuple[int, int]] = []
         confidences: list[float] = []
         frame_index = 0
+        decoded_bytes = 0
         while True:
             ok, frame = cap.read()
             if not ok:
                 break
-            if frame_index % step == 0:
+            decoded_bytes += frame.nbytes
+            if (
+                frame.shape[0] * frame.shape[1] > settings.max_image_pixels
+                or frame_index >= settings.max_video_frames
+                or decoded_bytes > settings.max_decoded_bytes
+            ):
+                raise ProcessingError("decode_resource_limit")
+            if frame_index % step == 0 and len(samples) < settings.max_sampled_frames:
                 detection = self._detector.detect(frame, conf)
                 samples.append((frame_index, detection.person_count))
                 confidences.extend(detection.confidences)

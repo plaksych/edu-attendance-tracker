@@ -5,3 +5,5 @@ minio==7.2.15
 ultralytics==8.3.132
 opencv-python-headless==4.11.0.86
 numpy<2.3
+Pillow==12.3.0
+pyseccomp==0.1.2; sys_platform == "linux"

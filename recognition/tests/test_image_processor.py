@@ -25,6 +25,8 @@ class Storage:
 
 
 class Detector:
+    metadata = {"engine": "test"}
+
     def detect(self, frame: np.ndarray, _confidence: float) -> Detection:
         return Detection(
             person_count=3,
@@ -44,6 +46,7 @@ class ImageProcessorTests(unittest.TestCase):
             sample_rate_fps=1.0,
             confidence_threshold=0.35,
             attempts=1,
+            claim_token="00000000-0000-0000-0000-000000000007",
         )
         source = SourceContext(
             source_kind="upload",
@@ -67,10 +70,13 @@ class ImageProcessorTests(unittest.TestCase):
         self.assertEqual(result.relative_error, 0.25)
         self.assertTrue(result.within_tolerance)
         self.assertEqual(result.count_stddev, 0.0)
-        self.assertEqual(result.annotated_object_key, "annotated/uploads/42.jpg")
+        self.assertEqual(
+            result.annotated_object_key,
+            "annotated/jobs/7/attempts/1/00000000-0000-0000-0000-000000000007.jpg",
+        )
         self.assertIsNotNone(storage.uploaded)
         assert storage.uploaded is not None
-        self.assertEqual(storage.uploaded[0], "annotated/uploads/42.jpg")
+        self.assertEqual(storage.uploaded[0], result.annotated_object_key)
         self.assertEqual(storage.uploaded[1], "image/jpeg")
 
 
