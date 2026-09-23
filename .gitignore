@@ -252,6 +252,8 @@ output/
 docs/report-assets/
 docs/recognition-architecture-summary.md
 docs/50-camera-batch-architecture.md
+docs/db-roles.sql
+recognition/PRODUCTION.md
 tmp/
 
 # Локальные таблицы и выгрузки
@@ -265,5 +267,7 @@ tmp/
 .claude/
 *.docx
 artifacts/
+frontend/test-results/
+frontend/playwright-report/
 .env.*
 !.env.example

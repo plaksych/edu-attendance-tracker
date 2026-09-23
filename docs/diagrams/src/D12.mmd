@@ -1,0 +1,15 @@
+flowchart TB
+  source["Проверяемая ревизия"] --> checks["Тесты / lint / build / security / diagrams"]
+  checks --> artifacts["Артефакты и image digests"]
+  artifacts --> gate{"Допуск владельца и evidence?"}
+  gate -->|"нет"| stop["Остановить продвижение"]
+  gate -->|"да"| preflight["Preflight: config / secrets / TLS / storage / model"]
+  preflight --> backup["Backup БД + объектов в согласованном состоянии"]
+  backup --> migration["Явные migrate и storage-init"]
+  migration --> deploy["Запуск точных образов"]
+  deploy --> smoke{"Readiness + auth + upload + результат?"}
+  smoke -->|"да"| observe["Наблюдение; разрешение трафика"]
+  smoke -->|"нет"| rollback["Стоп записи; совместимые прежние образы или restore"]
+  backup -.-> restore["Restore в чистую изолированную среду"]
+  restore -.-> verify["Сверить миграцию, строки БД, объекты и сценарий"]
+  note["ПРОЦЕДУРА ДОПУСКА, не журнал выполненного CI/deploy/restore. Авто-downgrade не обещается."]

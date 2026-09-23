@@ -1,0 +1,49 @@
+erDiagram
+  users ||--o{ login_sessions : "серверная сессия"
+  users ||--o{ access_grants : "область преподавателя"
+  access_grants }o--|| groups : "группа"
+  users |o--o{ audit_events : "actor nullable"
+  users ||--o{ idempotency_records : "ключ запроса"
+  users ||--o{ import_previews : "предпросмотр"
+  users {
+    int id PK
+    string username UK
+    string password_hash "Argon2"
+    string role
+    int auth_version
+    bool enabled
+  }
+  login_sessions {
+    string token_hash PK "SHA256; не raw cookie"
+    int user_id FK
+    string csrf_token
+    int auth_version
+    datetime expires_at
+  }
+  access_grants {
+    int user_id PK,FK
+    int group_id PK,FK
+  }
+  audit_events {
+    int id PK
+    int actor_id FK
+    string action
+    string object_id "логическая ссылка"
+    string reason
+    string request_id
+  }
+  idempotency_records {
+    int owner_id PK,FK
+    string route PK
+    string key PK
+    string fingerprint
+    int resource_id "логическая ссылка"
+    datetime expires_at
+  }
+  import_previews {
+    string id PK
+    int owner_id FK
+    string content
+    bool confirmed
+    datetime expires_at
+  }

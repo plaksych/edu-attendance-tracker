@@ -1,0 +1,21 @@
+sequenceDiagram
+  participant U as Frontend
+  participant A as Backend API
+  participant D as PostgreSQL
+  participant M as Media host / S3
+  U->>A: POST auth/login, username/password, Origin
+  A->>D: Throttle account + peer, Argon2, новая session
+  A-->>U: HttpOnly Secure SameSite=Strict cookie, csrf_token
+  U->>A: GET auth/me с cookie
+  A->>D: token hash, expiry, enabled, auth_version
+  A-->>U: Роль и CSRF
+  U->>A: Изменение + X-CSRF-Token
+  A->>D: Роль + teacher groups + object scope
+  A->>D: Изменение + audit request_id
+  U->>A: GET uploads/ID/media или captures/ID/media
+  A->>D: Проверить scope, ключ медиа и записанный срок
+  A-->>U: Presigned URL, TTL по умолчанию 120 s
+  U->>M: GET по временной bearer-ссылке
+  Note over A,M: Logout / auth_version отзывает сессию, но уже выданная ссылка живёт до TTL
+  U->>A: POST auth/logout + CSRF
+  A->>D: Удалить session, audit

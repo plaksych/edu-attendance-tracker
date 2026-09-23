@@ -1,0 +1,29 @@
+flowchart LR
+  subgraph outside["Вне доверенного серверного контура"]
+    roles["Администратор / оператор / преподаватель / аналитик"]
+    files["Пользовательские изображения и видео: недоверенный ввод"]
+    cameras["RTSP-камеры: опциональный профиль camera"]
+  end
+  subgraph device["Устройство пользователя"]
+    ui["Frontend"]
+    local["Browser inference: локальный Worker"]
+  end
+  subgraph server["Одно учебное заведение; серверный контур"]
+    api["Backend API: сессия и полномочия"]
+    jobs["Scheduler / maintenance / recognition"]
+    db[("PostgreSQL")]
+    s3[("S3 / MinIO: закрытый бакет")]
+    cap["Capture: опционально"]
+  end
+  roles --> ui
+  files -->|"локальная обработка"| local
+  files -->|"явная серверная загрузка"| api
+  ui -->|"HTTPS + cookie"| api
+  api --> db
+  api --> s3
+  jobs --> db
+  jobs --> s3
+  cameras -.->|"RTSP, allowlist сети"| cap
+  cap -.-> db
+  cap -.-> s3
+  ui -->|"короткоживущая signed URL"| s3

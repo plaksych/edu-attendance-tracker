@@ -1,0 +1,14 @@
+flowchart TB
+  frontend["Frontend: React + Vite; Nginx"] -->|"REST"| api["Backend API: FastAPI; без scheduler в lifespan"]
+  api --> db[("PostgreSQL: данные, сессии, очередь")]
+  api --> s3[("S3 / MinIO")]
+  scheduler["Scheduler: планирование и агрегация; advisory lock 739401"] --> db
+  maintenance["Maintenance: lease recovery и orphan GC; lock 739402"] --> db
+  maintenance --> s3
+  capture["Capture: профиль camera; claim + heartbeat"] -.-> db
+  capture -.-> s3
+  recognition["Recognition: CPU inference; claim / heartbeat / CAS"] --> db
+  recognition --> s3
+  migrate["migrate: alembic upgrade head; одноразовый ops"] --> db
+  init["storage-init: бакет и lifecycle; одноразовый ops"] --> s3
+  note["Пунктир: опциональный камерный контур. Нет Redis / Kafka."]

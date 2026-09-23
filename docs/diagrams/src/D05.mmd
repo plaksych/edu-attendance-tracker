@@ -1,0 +1,50 @@
+erDiagram
+  groups ||--o{ schedule : "группа"
+  teachers |o--o{ schedule : "преподаватель"
+  disciplines ||--o{ schedule : "дисциплина"
+  classrooms |o--o{ schedule : "аудитория"
+  schedule ||--o{ sessions : "RESTRICT история"
+  sessions ||--o{ measurements : "два типа замера"
+  sessions ||--o| attendance_records : "итог"
+  sessions ||--o{ detection_snapshots : "legacy сохранена, не текущий pipeline"
+  classrooms ||--o{ classroom_cameras : "камеры аудитории"
+  cameras ||--o| classroom_cameras : "одна аудитория на камеру"
+  measurements ||--o{ camera_captures : "источники замера"
+  cameras ||--o{ camera_captures : "RESTRICT история"
+  sessions {
+    int id PK
+    int schedule_id FK
+    date date "UNIQUE schedule_id,date"
+    int expected_count_snapshot "nullable для старых данных"
+    string aggregation_mode_snapshot
+    enum status
+  }
+  measurements {
+    int id PK
+    int session_id FK
+    enum type "UNIQUE session_id,type"
+    int final_people_count "NULL не равно 0"
+    string source_reference_status
+  }
+  camera_captures {
+    int id PK
+    int measurement_id FK
+    int camera_id FK
+    string role_snapshot
+    int priority_snapshot
+    string zone_code_snapshot
+    string snapshot_origin "captured или legacy"
+  }
+  attendance_records {
+    int id PK
+    int session_id FK,UK
+    int expected_count
+    float attendance_rate "NULL при expected=0"
+    enum calculation_status
+  }
+  detection_snapshots {
+    int id PK
+    int session_id FK
+    datetime captured_at
+    int person_count
+  }

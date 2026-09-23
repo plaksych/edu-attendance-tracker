@@ -1,0 +1,15 @@
+flowchart LR
+  entry["/login; в статике demo session"] --> shell["Layout + RoleBoundary; API проверяет права отдельно"]
+  shell --> overview["/ : обзор admin; остальные в рабочий раздел роли"]
+  shell --> recognition["/recognition: admin, operator"]
+  shell --> sessions["/sessions и /sessions/:id: кроме analyst"]
+  shell --> schedule["/schedule: чтение всех ролей, изменения admin/operator"]
+  shell --> catalog["/catalog: чтение всех ролей, изменения admin/operator"]
+  shell --> cameras["/cameras: admin; контур опционален"]
+  shell --> analytics["/analytics: все роли"]
+  shell --> admin["/admin/users, /admin/audit, /admin/system: admin"]
+  shell --> missing["Неизвестный маршрут: страница не найдена"]
+  mode["VITE_STATIC_DATA: build-time demo / working"] --> shell
+  presentation["Показ admin: demo и working, те же экраны"] --> shell
+  presentation --> steps["Обзор → Распознавание → Первое занятие → Аналитика группы"]
+  steps --> restore["Назад / далее, Escape, возврат фильтров, optional fullscreen"]

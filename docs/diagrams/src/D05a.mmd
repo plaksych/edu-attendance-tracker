@@ -1,0 +1,33 @@
+erDiagram
+  users |o--o{ recognition_uploads : "owner_id"
+  sessions |o--o{ recognition_uploads : "необязательная связь"
+  measurements |o--o| recognition_uploads : "один upload на замер без capture"
+  recognition_uploads |o--o{ recognition_jobs : "история повторов"
+  camera_captures |o--o| recognition_jobs : "одна job на capture"
+  recognition_jobs ||--o| recognition_results : "не более одного результата"
+  recognition_jobs ||--o{ recognition_corrections : "ручная оценка отдельно"
+  users ||--o{ recognition_corrections : "автор"
+  recognition_uploads {
+    int id PK
+    string original_object_key UK
+    string content_sha256
+    int owner_id FK
+    int session_id FK
+    int measurement_id FK,UK
+  }
+  recognition_jobs {
+    int id PK
+    int camera_capture_id FK,UK "XOR upload_id"
+    int upload_id FK
+    enum status
+    int attempts
+    string claim_token "маркер владения попыткой"
+    datetime lease_until
+  }
+  recognition_results {
+    int id PK
+    int recognition_job_id FK,UK
+    int people_count
+    string annotated_object_key "ключ попытки"
+    json inference_metadata
+  }

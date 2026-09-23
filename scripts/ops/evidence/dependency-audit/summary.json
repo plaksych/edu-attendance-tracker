@@ -1,6 +1,6 @@
 {
   "scanner": "pip-audit==2.9.0 / npm audit",
-  "time": "2026-09-23T19:49:33.564916+00:00",
+  "time": "2026-09-23T20:09:08.459197+00:00",
   "scope": "locked packages; no application exploitability determination",
   "checks": {
     "backend": {
@@ -39,7 +39,7 @@
     },
     "frontend": {
       "exit_code": 0,
-      "lock_sha256": "d2bf64f1793dbd190bbc4747519ef97781b60569bc25ff89af79a526b796cf12",
+      "lock_sha256": "52ea751a7a9203b8eb9f3e327f5f80609dec0c2ed22561a59458113586f4fe36",
       "counts": {
         "info": 0,
         "low": 0,

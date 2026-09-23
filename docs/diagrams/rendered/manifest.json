@@ -1,0 +1,153 @@
+{
+  "base_revision": "8933e0a7c35d33c005f01c138b936e27f9946092",
+  "note": "Working-tree documentation, not a release validation. Browser/font versions affect pixels.",
+  "mermaid": "11.17.2",
+  "playwright": "1.63.0",
+  "chromium": "154.0.8037.57",
+  "diagrams": [
+    {
+      "id": "D01",
+      "source_sha256": "a0dfc16b7d1ad4da54bb85afeb9c102ed5f4fa76f2f536ec2c627682ab9ee347",
+      "svg_sha256": "8b5dd59114d3879dd90ccf22f12ff16d6dc68086553cf1681b8ef06dd4241a21",
+      "png_sha256": "99f477f7fbafd3aa2736dc2335cf7ef7c70993d5b61e1e2d2ef8285638054403",
+      "width": 1597,
+      "height": 609
+    },
+    {
+      "id": "D02",
+      "source_sha256": "a9e8febadccd12a173f8ee55f3e42cb19e2ad4929c5167a7d815430516b0e8c6",
+      "svg_sha256": "4d99e0cb48a94b57935572ba2e3ddd218c08d08e740a943e22e3ab510ea09883",
+      "png_sha256": "1f3c30e3c0ee3ae27c4a203d6971ea8189f9bace0445ba733eb4061a16455bd1",
+      "width": 2136,
+      "height": 452
+    },
+    {
+      "id": "D03",
+      "source_sha256": "e1410463fbfd6c02b6e137905135106839ade48b345da4c0c6daf5d80163a7ea",
+      "svg_sha256": "adbc45afb7ac756669efa71f5d1bb298b4d25aacc7867014c412baf7eb7e99d1",
+      "png_sha256": "1c182b81656aa66adeabbbb76e4fa2e24a0630ee14ea459c648131a5d8803177",
+      "width": 1543,
+      "height": 813
+    },
+    {
+      "id": "D04",
+      "source_sha256": "def69742a10dd92fbaf1b5fc6729c7c6abc979f69c7cae2f5e1bfbba642bbe80",
+      "svg_sha256": "bc476f136f7ca4071aecdab4b192e796a192e21c12b5569835060047d71558c2",
+      "png_sha256": "571fd85d99dc6ba567b8591708c75c46c6640894c78a80353ba990fb0fea038a",
+      "width": 1826,
+      "height": 508
+    },
+    {
+      "id": "D05",
+      "source_sha256": "1f6394d02a3a10fb267b005bb4dc3a365d08da513edc8a979e19ec03d901809a",
+      "svg_sha256": "a2aa431b56e9285138fdfa7588b7b0a2523a9ba365913babc62d5431f959f178",
+      "png_sha256": "1072c529b037f81cfe8e50aab722a20005011a680315b193751fc617bc0681ae",
+      "width": 2185,
+      "height": 1505
+    },
+    {
+      "id": "D05a",
+      "source_sha256": "cdf30f049138c0cd3db96a59c66efa37255fa6c1af0df10df308e90bae9505f7",
+      "svg_sha256": "7646bdb6cd62149a1134b9e150a92661f94fde0b40c867c5e8fd4987c9ae3596",
+      "png_sha256": "d055bb416afd8e8fe82fe570a14ae06c712cebbcc6e7b8aa799913926f2d978b",
+      "width": 1108,
+      "height": 1337
+    },
+    {
+      "id": "D05b",
+      "source_sha256": "c333f4e971f51c58f2e46189c0dc714388e7b679d5151e13b8c4c06f735e3c38",
+      "svg_sha256": "55da562376f3a4ee90233216a3113b4bfb9150adebc2c58b9a8a097d0fa9de9e",
+      "png_sha256": "ed905e50a8493edf66809619bc809cb43c32490e92cfe44f21af2bf2229d1619",
+      "width": 2258,
+      "height": 902
+    },
+    {
+      "id": "D05c",
+      "source_sha256": "ca044d9f20b877d9e6d254fd478222aec6b4810903b4a7e29893fea2265f6bf1",
+      "svg_sha256": "fcf93cc25b842b2d8d82dbb9d061bd46c52763dae84a2941a05bedbe36da6d3e",
+      "png_sha256": "f010f6990f22318719eabef81479018be6806f3a2ebb346a69ba84be02744d06",
+      "width": 954,
+      "height": 273
+    },
+    {
+      "id": "D05d",
+      "source_sha256": "64880076d9d7e3e787d982fc9ad131ca228b829a0b0373934fbcab8f051c4b3b",
+      "svg_sha256": "24003bdd0b37543812dda0de8527b75f7135992eee0be34c006c841ebaa62760",
+      "png_sha256": "41552c061b4a2d825dd9b8191bba7474956371639b828f943278b7c8533bcd3b",
+      "width": 1151,
+      "height": 749
+    },
+    {
+      "id": "D06",
+      "source_sha256": "2ca6d446a459157d747b2fc6398162514d219c8e809445bccae36bb58dd51990",
+      "svg_sha256": "d0b4b2d2da85331d4dd15da4bfa8fd145dbd880bc022497c4605dfb42c6d1c7c",
+      "png_sha256": "d18b45f8a758e0ca86a356a36c853c6fb5852eee8127e506483b22e7ff585515",
+      "width": 1771,
+      "height": 1303
+    },
+    {
+      "id": "D07",
+      "source_sha256": "db4c757a3f8475f4aadf689987a3a74a3dcb66658acb52c1a8bd6a9793e11074",
+      "svg_sha256": "4a19d963449fa8824b5cda1316a1c669b6ce85d84be4840faceeb2aff35ba9ff",
+      "png_sha256": "5e50c8ec7d4d5aceb91552aeda67994a40344f0db5712c57a9fe067e28f72bc6",
+      "width": 1582,
+      "height": 1217
+    },
+    {
+      "id": "D08",
+      "source_sha256": "c27ab738c2f25f20eecfc47b9feaa08dab58f195a15978467bf53b3f1b860773",
+      "svg_sha256": "b31e08c1d8a4c3235a9f394dc22aaad01d8108fea61cd3f07a8bb255fb8aa04e",
+      "png_sha256": "3e772587751c631b4798cce457ba61180a1dd5113c69b68122250fd8a1f0ba04",
+      "width": 1206,
+      "height": 1173
+    },
+    {
+      "id": "D09",
+      "source_sha256": "9c739f3db5801dcedbc0b723a647c9553dad25f24854d8a1b7d3e14ef4b41ac5",
+      "svg_sha256": "00088f81311da0076d79259c112e2efdda7eb32b3ab048c9236ce1202dc65755",
+      "png_sha256": "c9c910c4e942b4516a0180f0e358796729272f5c14cfe2af37ba44dc5a27b9b8",
+      "width": 1749,
+      "height": 936
+    },
+    {
+      "id": "D10",
+      "source_sha256": "06e5e023ad352d33e86a39cd9db6c8a369112c4eeee219d9ac8e14088822f642",
+      "svg_sha256": "64a1f93799e414625e207e5075fcf89b412a24edf6f69c7961455a723b624bb3",
+      "png_sha256": "ecde644e9752fb98f2ff19f167f39b64b204a62d99567e8f4c8dd225d9abc97c",
+      "width": 1544,
+      "height": 995
+    },
+    {
+      "id": "D11",
+      "source_sha256": "9ddee1badc63653c425013151cc99ad870dba3d72c8232e3971997d32d59627f",
+      "svg_sha256": "7fbdc5960974b77edbbfcba05e176272061173c0141c370cd11bd5cd1339c8c1",
+      "png_sha256": "4ea6eebace7caac4bb26c91cfd22934754fade7116495590a72f32c39be728f7",
+      "width": 1494,
+      "height": 896
+    },
+    {
+      "id": "D12",
+      "source_sha256": "503065c9e8b85fe6958959645e1ae104083dd9f3c567f0e564e586ffcd9bac3a",
+      "svg_sha256": "79da7a7fd32a176c5fd57df8c34a591224d59006ebc5bea42074065a2e90cdf6",
+      "png_sha256": "9d19ba2d8ee11d5f73794d51d360a709e2117e699626ce5163f5d2e9e0fc94c1",
+      "width": 741,
+      "height": 1760
+    },
+    {
+      "id": "D13",
+      "source_sha256": "0f78882b5a713b8583b2734ed1f86a3c0b03fc418b3957ff90fb90a0e3851800",
+      "svg_sha256": "5567d77702da07da970167406d540cff571c616e8adf38895518c623fa72ff13",
+      "png_sha256": "3ea3d9788e74bb23cc8847903b648f383ad7aad4decf6f1900154e0edd35b033",
+      "width": 1516,
+      "height": 1054
+    },
+    {
+      "id": "D14",
+      "source_sha256": "bd8d6db1626d7c45c917fda655894cbd2b5d3429f886af4433cc2b2f41d6662c",
+      "svg_sha256": "2e8528c79dde87bbe09b7b616efeb672030fa4424eb59e0eaefcc594871f6dd0",
+      "png_sha256": "fd3f4db8553e3b897daa2245c6b25264baef05d859b842910ef267da75107480",
+      "width": 896,
+      "height": 1318
+    }
+  ]
+}

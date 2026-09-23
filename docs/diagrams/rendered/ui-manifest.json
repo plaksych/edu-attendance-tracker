@@ -1,0 +1,74 @@
+{
+  "base_revision": "5f388a64090269ae833d64191a38e980be67456f",
+  "provenance": "actual frontend screenshot of synthetic demo_fixture; no inference run",
+  "chromium": "154.0.8037.57",
+  "source_hashes": {
+    "frontend/src/components/Layout.tsx": "da188908f4320e38c5617b4efb0807ede5b796babff9525a324d82aa97fbb935",
+    "frontend/src/components/PresentationControls.tsx": "39bc4bb80d005234f839ea328a0294e11eac5e8b97b7ed8599bb2640428ab13e",
+    "frontend/src/pages/DashboardPage.tsx": "89e8cd567bed1c21b3743bd1c07f15d62c110ff77067148a1c857648264cfed1",
+    "frontend/src/api/staticClient.ts": "1d6e3ba7ad2752aefe08324662640fad72b2462b60a6fbcbb97f6fcfbb517365",
+    "frontend/src/production.css": "cc7d524c21fdce5e50967077c232d6715ba4bdd497f6e3c202dea8146ed377a5"
+  },
+  "overview_counts": [
+    "Оценка присутствия69%взвешено по численности групп",
+    "Занятий сегодня3проведено всего: 30",
+    "Занятия с полным итогом20 / 30частичных: 4, неудачных: 6",
+    "Групп3камер: 0",
+    "Занятий с итогом10",
+    "Средняя посещаемость82%в среднем 19.75 чел.",
+    "Занятия с двумя замерами6частичных: 2, неудачных: 2"
+  ],
+  "page_errors": [],
+  "api_requests": [],
+  "screenshots": [
+    {
+      "file": "UI-overview-desktop.png",
+      "width": 1440,
+      "height": 1000,
+      "route": "#/",
+      "sha256": "b1fd3f45f578a12e0cdb8f2cd416b98367151426c85cc456816ffa6266d2634d"
+    },
+    {
+      "file": "UI-overview-mobile.png",
+      "width": 390,
+      "height": 844,
+      "route": "#/",
+      "sha256": "db38f5497d19a368742c0e2904b5753d69ae79b430aefa01856c8d4f902c8746"
+    },
+    {
+      "file": "UI-presentation-1.png",
+      "width": 1280,
+      "height": 900,
+      "route": "#/",
+      "sha256": "bccf973d1edf528166ad66dccfacb9c14c820ae07c96f21b52b4a392995e0a10"
+    },
+    {
+      "file": "UI-presentation-2.png",
+      "width": 1280,
+      "height": 900,
+      "route": "#/recognition",
+      "sha256": "7bc06555e07851ad9a7a07f4bb94a556b7f1d4711bd9b68db6c58e98e315246b"
+    },
+    {
+      "file": "UI-presentation-3.png",
+      "width": 1280,
+      "height": 900,
+      "route": "#/sessions/2026092307?date=2026-09-23",
+      "sha256": "9ec35605b3a00caab4347e8d9793122500831d473ae2a974d1e47cb7cdcf97cf"
+    },
+    {
+      "file": "UI-presentation-4.png",
+      "width": 1280,
+      "height": 900,
+      "route": "#/analytics?from=2026-09-10&to=2026-09-23&group=1",
+      "sha256": "a89d8b41518cfcb5da7d91ad8b813d04368cc8388bb0da1e8e1aa0913854f02c"
+    },
+    {
+      "file": "UI-presentation-mobile.png",
+      "width": 390,
+      "height": 844,
+      "route": "#/analytics?from=2026-09-10&to=2026-09-23&group=1",
+      "sha256": "c67db36485761f1bdedfdaf890a649a30632fa24b233b47c48f3a039d9496255"
+    }
+  ]
+}
