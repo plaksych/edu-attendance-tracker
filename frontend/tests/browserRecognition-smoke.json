@@ -1,0 +1,450 @@
+{
+  "startedAt": "2026-09-23T19:18:39.932Z",
+  "status": "passed",
+  "base": "/edu-attendance-tracker/",
+  "scope": "Real vendored YOLOv8n + ONNX Runtime Web; synthetic 320x240 geometric canvas only; no private media",
+  "caveat": "Execution smoke only. Not a people-detection or classroom-accuracy evaluation. Local timings are not benchmarks.",
+  "baseCommit": "cb34254d63c4d7415a86f6af18ffdf5df23cf651",
+  "environment": {
+    "node": "v26.4.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1",
+    "browser": "154.0.8037.57"
+  },
+  "model": {
+    "path": "yolov8n.onnx",
+    "bytes": 12756454,
+    "sha256": "353ca4ab4fa9d4e5499d3300912faa30dae49718f90be8a159ff6af09a4e66b7",
+    "verification": "SHA-256 checked in worker before creating a session",
+    "externalData": false
+  },
+  "sourceHashes": {
+    "src/lib/browserRecognition.ts": "2b4a6d35659ba0628173627d4f98dcc3c37b958211e090fed6f8e5fa403c864b",
+    "src/lib/browserRecognitionClient.ts": "f3ad83f2c1de29fab65cb0cd455673ed155869e164a8816c08b68f86da0644db",
+    "src/lib/browserRecognitionCore.ts": "d899a49c39d702775d95e1cf342bb940a293f08244a693a4a8f207c831f0eb93",
+    "src/workers/browserRecognition.bootstrap.js": "a1782cfb39189b2c9ba27384b30ddd69f6e516a52af779ee111025fa2d64a16c",
+    "src/workers/browserRecognition.worker.ts": "b35366350524023ff35efed8d58a52bc41438affbb00c3a443bd035d9b81d4b3",
+    "tests/browserHarness.ts": "7c27fd9ebd27f7813edfe2fec92d66ae83b1157265164e06b41c4c5e821bd74d",
+    "tests/browserRecognitionSmoke.mjs": "48e0b908038213961bdc85b62d496fabcd4dd8c75952f5f9c7e5db3fc18ceefd"
+  },
+  "browserRequests": [
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "document"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserHarness-Bon80imR.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/ort/ort.min.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "other"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/models/yolov8n.onnx",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "fetch"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/ort/ort.min.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "other"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/models/yolov8n.onnx",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "fetch"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/ort/ort.min.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "other"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/models/yolov8n.onnx",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "fetch"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.mjs",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "fetch"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/ort/ort.min.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "other"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/models/yolov8n.onnx",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "fetch"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.mjs",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "script"
+    },
+    {
+      "url": "http://127.0.0.1:54693/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+      "method": "GET",
+      "bodyBytes": 0,
+      "resourceType": "fetch"
+    }
+  ],
+  "serverRequests": [
+    {
+      "path": "/edu-attendance-tracker/",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 787
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserHarness-Bon80imR.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 3698
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 583
+    },
+    {
+      "path": "/edu-attendance-tracker/ort/ort.min.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 357641
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 5394
+    },
+    {
+      "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 503,
+      "responseBytes": 49
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 583
+    },
+    {
+      "path": "/edu-attendance-tracker/ort/ort.min.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 357641
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 5394
+    },
+    {
+      "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": null,
+      "responseBytes": 0,
+      "cancelled": true
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 583
+    },
+    {
+      "path": "/edu-attendance-tracker/ort/ort.min.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 357641
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 5394
+    },
+    {
+      "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 12756454
+    },
+    {
+      "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.mjs",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 44677
+    },
+    {
+      "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 21872216
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 583
+    },
+    {
+      "path": "/edu-attendance-tracker/ort/ort.min.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 357641
+    },
+    {
+      "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 5394
+    },
+    {
+      "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 12756454
+    },
+    {
+      "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.mjs",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 44677
+    },
+    {
+      "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+      "query": "",
+      "method": "GET",
+      "requestBodyBytes": 0,
+      "status": 200,
+      "responseBytes": 21872216
+    }
+  ],
+  "blockedRequests": [],
+  "console": [],
+  "pageErrors": [],
+  "stages": {
+    "initialLoad": {
+      "passed": true,
+      "workers": 0,
+      "mlRequests": 0
+    },
+    "failedInitialization": {
+      "name": "Error",
+      "error": "Не удалось загрузить модель (HTTP 503)",
+      "elapsedMs": 189.10000014305115
+    },
+    "cancelledInitialization": {
+      "name": "AbortError",
+      "error": "Обработка отменена",
+      "elapsedMs": 66.5
+    },
+    "firstRealInference": {
+      "initMs": 1267.6000001430511,
+      "detectWallMs": 960.8999998569489,
+      "totalMs": 2228.5,
+      "result": {
+        "boxes": [],
+        "averageConfidence": null,
+        "elapsedMs": 940.9000000953674,
+        "provenance": "browser_inference",
+        "model": "yolov8n-coco-browser",
+        "modelSha256": "353ca4ab4fa9d4e5499d3300912faa30dae49718f90be8a159ff6af09a4e66b7",
+        "runtime": "onnxruntime-web 1.22.0 / wasm",
+        "confidenceThreshold": 0.35,
+        "nmsIouThreshold": 0.45,
+        "processedAt": "2026-09-23T19:18:50.101Z",
+        "sourceWidth": 320,
+        "sourceHeight": 240
+      }
+    },
+    "cancelledInference": {
+      "name": "AbortError",
+      "error": "Обработка отменена",
+      "runEntered": true,
+      "elapsedMs": 13.900000095367432,
+      "workerClosed": true
+    },
+    "realInferenceAfterCancellation": {
+      "initMs": 998.5,
+      "detectWallMs": 949.2999999523163,
+      "totalMs": 1947.7999999523163,
+      "result": {
+        "boxes": [],
+        "averageConfidence": null,
+        "elapsedMs": 940.0999999046326,
+        "provenance": "browser_inference",
+        "model": "yolov8n-coco-browser",
+        "modelSha256": "353ca4ab4fa9d4e5499d3300912faa30dae49718f90be8a159ff6af09a4e66b7",
+        "runtime": "onnxruntime-web 1.22.0 / wasm",
+        "confidenceThreshold": 0.35,
+        "nmsIouThreshold": 0.45,
+        "processedAt": "2026-09-23T19:18:53.061Z",
+        "sourceWidth": 320,
+        "sourceHeight": 240
+      }
+    }
+  },
+  "runtime": {
+    "versions": {
+      "common": "1.22.0",
+      "web": "1.22.0"
+    },
+    "numThreads": 1,
+    "proxy": false,
+    "wasmPaths": "http://127.0.0.1:54693/edu-attendance-tracker/ort/"
+  },
+  "network": {
+    "passed": true,
+    "policy": "Exact same-origin harness/runtime/model asset GET allowlist; no queries or request bodies",
+    "uploadedBytes": 0,
+    "wasm": [
+      {
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+        "query": "",
+        "method": "GET",
+        "requestBodyBytes": 0,
+        "status": 200,
+        "responseBytes": 21872216
+      },
+      {
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+        "query": "",
+        "method": "GET",
+        "requestBodyBytes": 0,
+        "status": 200,
+        "responseBytes": 21872216
+      }
+    ],
+    "unexpectedRequests": 0
+  },
+  "workersCreated": 4,
+  "cleanup": {
+    "finalWorkerClosed": true,
+    "browserClosed": true,
+    "serverClosed": true
+  },
+  "screenshot": "frontend/tests/browserRecognition-smoke.png",
+  "finishedAt": "2026-09-23T19:18:54.401Z"
+}
