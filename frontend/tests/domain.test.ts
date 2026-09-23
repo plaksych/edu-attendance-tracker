@@ -23,6 +23,19 @@ describe('deterministic fixture adapter', () => {
     const all = await Promise.all([1, 2, 3].map(id => staticApi.getGroupTimeline(id)))
     expect(all.some(t => t.points.some(p => p.avg_rate === 0))).toBe(true)
   })
+  it('keeps measurement offsets and historical group size consistent', async () => {
+    const [session] = await staticApi.getSessions(DEMO_DATE)
+    const original = session.attendance?.expected_count
+    expect(Date.parse(session.measurements[0].planned_at) - Date.parse(session.started_at!)).toBe(15 * 60_000)
+    expect(Date.parse(session.finished_at!) - Date.parse(session.measurements[1].planned_at)).toBe(15 * 60_000)
+    const count = session.schedule.group.students_count
+    try {
+      await staticApi.updateGroup(session.schedule.group.id, { students_count: count + 10 })
+      expect((await staticApi.getSession(session.id)).attendance?.expected_count).toBe(original)
+    } finally {
+      await staticApi.updateGroup(session.schedule.group.id, { students_count: count })
+    }
+  })
   it('does not simulate import success or model quality', async () => {
     await expect(staticApi.importSchedule({} as File)).rejects.toThrow('не изменены')
     const quality = await staticApi.getRecognitionEvaluationSummary()

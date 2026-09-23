@@ -3,6 +3,7 @@ import { DEMO_DATE, shiftDate } from '../lib/format'
 
 const clone = <T,>(value: T): T => structuredClone(value)
 const groups: Group[] = [24, 32, 18].map((count, index) => ({ id: index + 1, name: `Учебная группа ${index + 1}`, course: index + 1, faculty: 'Учебный факультет', students_count: count }))
+const fixtureGroupSizes = new Map(groups.map(group => [group.id, group.students_count]))
 const teachers: Teacher[] = groups.map(g => ({ id: g.id, full_name: `Преподаватель ${g.id}`, email: null, department: 'Учебная кафедра' }))
 const disciplines: Discipline[] = ['Прикладная математика', 'Информационные системы', 'Основы статистики'].map((name, index) => ({ id: index + 1, name }))
 const classrooms: Classroom[] = groups.map(g => ({ id: g.id, number: `Д-${100 + g.id}`, capacity: 40, aggregation_mode: 'single', cameras: [] }))
@@ -24,7 +25,10 @@ function scheduleOn(date: string) {
 function makeSession(item: ScheduleItem, date: string): SessionDetail {
   const id = Number(date.replace(/-/g, '')) * 100 + item.id
   const variation = (item.id + Number(date.slice(-2))) % 7
-  const expected = item.group.students_count
+  const expected = fixtureGroupSizes.get(item.group.id) ?? item.group.students_count
+  const startsAt = Date.parse(`${date}T${item.starts_at}+03:00`)
+  const endsAt = Date.parse(`${date}T${item.ends_at}+03:00`)
+  const offset = Math.min(15 * 60_000, (endsAt - startsAt) / 3)
   const after = variation === 0 ? 0 : Math.round(expected * (0.65 + variation * 0.06))
   const partial = variation === 2
   const failed = variation === 3
@@ -37,7 +41,7 @@ function makeSession(item: ScheduleItem, date: string): SessionDetail {
     id, date, provenance: 'demo_fixture', schedule: clone(item), status: isCancelled ? 'cancelled' : 'finished',
     started_at: `${date}T${item.starts_at}+03:00`, finished_at: `${date}T${item.ends_at}+03:00`,
     attendance: isCancelled ? null : { expected_count: expected, after_start_count: counts[0], before_end_count: counts[1], detected_average: average, detected_max: measured.length ? Math.max(...measured) : null, attendance_rate: average !== null && expected > 0 ? average / expected : null, calculation_status: failed ? 'failed' : partial ? 'partial' : 'complete', calculated_at: `${date}T16:00:00+03:00` },
-    measurements: counts.map((count, index) => ({ id: id * 10 + index, provenance: 'demo_fixture', type: index === 0 ? 'after_start' : 'before_end', planned_at: `${date}T${index === 0 ? item.starts_at : item.ends_at}+03:00`, status: isCancelled ? 'cancelled' : count === null ? 'failed' : 'completed', final_people_count: count, confidence: null, aggregation_method: 'single', error: count === null && !isCancelled ? 'Учебный сценарий: материал отсутствует' : null, captures: [] })),
+    measurements: counts.map((count, index) => ({ id: id * 10 + index, provenance: 'demo_fixture', type: index === 0 ? 'after_start' : 'before_end', planned_at: new Date(index === 0 ? startsAt + offset : endsAt - offset).toISOString(), status: isCancelled ? 'cancelled' : count === null ? 'failed' : 'completed', final_people_count: count, confidence: null, aggregation_method: 'single', error: count === null && !isCancelled ? 'Учебный сценарий: материал отсутствует' : null, captures: [] })),
   }
 }
 function history() {
