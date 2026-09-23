@@ -9,7 +9,8 @@ S3/MinIO, отдельные scheduler, maintenance и recognition worker.
 RTSP capture остаётся опциональным профилем `camera`.
 
 Подготовлен кандидат для review. Наличие ветки production не означает
-готовый production-релиз: полный S3 restore, путь API→S3→worker→отчёт, происхождение
+готовый production-релиз: серверные образы пока блокируются CVE/license проверками.
+Полный S3 restore, путь API→S3→worker→отчёт, происхождение
 весов и внешний допуск должны быть подтверждены отдельно. Fixtures и mock-тесты
 не являются доказательством модели или серверных полномочий.
 

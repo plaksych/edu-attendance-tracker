@@ -6,8 +6,9 @@
 
 **Production не допущен.** Локальные проверки не заменяют полный restore,
 проверку сетевых ограничений Linux и решение владельца по лицензиям весов.
-Проверенный программный срез: `0d515eb` (дальнейшие изменения документации
-не меняют этот срез). Итоговый SHA и PR указаны в передаче результата.
+Прикладной срез локального verify: `0d515eb`; итоговый CI-срез с исправлениями
+Linux-сборки: `18e5b17`. [PR #6](https://github.com/plaksych/edu-attendance-tracker/pull/6)
+открыт без auto-merge. Серверные образы не прошли security/license gate.
 
 ## Матрица
 
@@ -17,11 +18,11 @@
 
 | ID | Реализация и проверка | Статус | Evidence / оставшаяся граница |
 | --- | --- | --- | --- |
-| GIT-01 | Отдельная `production`, тематические коммиты, main не менялся | passed | Коммиты `8aeb509`…`0d515eb`; PR создаётся без merge/deploy |
+| GIT-01 | Отдельная `production`, тематические коммиты, main не менялся | passed | [PR #6](https://github.com/plaksych/edu-attendance-tracker/pull/6), без merge/deploy; remote main остался на исходном SHA |
 | BOOT-01 | Чистый checkout, hash locks, FastAPI/OpenAPI и сборка | passed | На `d43e364`: чистые backend+ops venv, 76 API/DB tests, 46 OpenAPI paths, `npm ci` и production build; не полный серверный стенд |
 | AUTH-01 | Cookie session, CSRF, роли, scope преподавателя, отзыв; запреты list/detail/media/CSV | passed | `backend/tests/test_access.py`, `test_media_access.py`, реальные запросы TestClient и PostgreSQL |
 | SEC-01 | Декодирование файлов, bounded XLSX, FFprobe, RTSP CIDR, отдельный inference-процесс | blocked | Unit/CPU smoke пройдены; Linux sandbox и фактический network egress не проверены |
-| SEC-02 | RTSP не возвращается API; production bundle исключает fixture; секреты вынесены | not_run | Локальные schema/bundle проверки пройдены; полный secret scan CI ещё не получен |
+| SEC-02 | RTSP не возвращается API; production bundle исключает fixture; секреты вынесены | passed | Schema/bundle проверки, Gitleaks и Trivy source scan прошли в указанном CI; это не доказательство отсутствия любых утечек |
 | DATA-01 | Preview/confirm, конфликты, календарь, историческая численность, миграция 0005 | passed | `backend/tests/test_workflows.py`, `test_calculations.py`, `test_migrations.py` |
 | DATA-02 | Upload связан с занятием/замером; новые jobs для retry, отдельные корректировки | not_run | Транзакционные API тесты пройдены; полный путь API→S3→worker→отчёт ещё не проверен |
 | QUEUE-01 | Claim UUID, действующий lease, CAS, immutable object keys, retry | passed | `capture/tests/test_queue_postgres.py`, `recognition/tests/test_queue_postgres.py`; реальные конкурентные соединения |
@@ -39,7 +40,7 @@
 | PERF-01 | Lazy маршруты/model/chart, worker вне UI thread, bounded media | passed | Build bundle report и actual CPU/browser timings; это lab observations, не field Web Vitals |
 | OPS-01 | Production Compose fail-closed, разные DB роли, private storage, ручной выпуск | not_run | Render policy tests пройдены; effective deployment/TLS/IAM на стенде не проверены |
 | OPS-02 | Backup/restore tooling и отдельная цель восстановления | blocked | PostgreSQL-only pg_dump/restore пройден; объекты S3 и полный восстановленный стенд не проверены |
-| CI-01 | Unit/integration/browser/security/container workflows, ручной promotion | not_run | Локальные результаты есть; удалённый CI run ещё не получен |
+| CI-01 | Unit/integration/browser/security/container workflows, ручной promotion | failed | [Run 35916443483](https://github.com/plaksych/edu-attendance-tracker/actions/runs/35916443483): 11 jobs passed, 3 container jobs failed на CVE/license gates; обходов нет |
 | DOC-01 | D01–D14, ERD fragments, pinned renderer, SVG/PNG | passed | [Галерея](diagrams/rendered/index.html), [manifest](diagrams/rendered/manifest.json); 18 схем, визуальная проверка D02/D06 и UI |
 | DOC-02 | Quickstart, API, режимы, runbooks, links check | not_run | Clean-checkout install/build и локальные ссылки проверены; полный серверный quickstart с S3/TLS ещё не проверен |
 | REL-01 | Notices, dependency audit, release/rollback и ручные approvals | blocked | [Third-party inventory](../THIRD_PARTY_NOTICES.md); требуется решение по модели/AGPL и поддержке storage |
@@ -55,7 +56,7 @@
   отдельных account/peer login budgets и подмены forwarded headers.
 - Проверены lint, TypeScript, 10 критичных Python-модулей через mypy,
   OpenAPI drift для 46 маршрутов, production build и исключение fixture из bundle.
-- Пройдены 35 отрицательных Compose-проверок, 18 ops guards и 15 Playwright
+- Пройдены 35 отрицательных Compose-проверок, 20 ops guards и 15 Playwright
   сценариев в трёх движках. Настоящие role/seed проверки создают отдельные БД.
 - Dependency audit закреплённых пакетов: 0 известных advisories. Для CPU wheels
   отдельно проверены upstream версии Torch 2.13.0 / torchvision 0.28.0;
@@ -73,8 +74,40 @@
   установлен из hash locks, 76 backend tests и OpenAPI drift прошли. Два
   предупреждения deprecation Starlette/httpx и AnyIO не скрывались.
 - Nginx явно задаёт MIME для `.mjs`/`.wasm` и отдаёт 404 вместо SPA на отсутствующий
-  runtime/model. Локально проверен конфигурационный regression test; настоящий
-  Nginx smoke добавлен в container CI и локально без контейнеров не выполнялся.
+  runtime/model. Настоящий Nginx smoke, сборка и сканирование frontend-контейнера
+  прошли на GitHub runner; локально контейнеры не запускались.
+
+## Удалённый CI
+
+[Проверенный run](https://github.com/plaksych/edu-attendance-tracker/actions/runs/35916443483)
+относится к head `18e5b1777c2da9574b79c37af35f8a3176b1a343` и PR merge-tree
+`65555bd351f1d0b2e58b57bc85214cf80336b716`. Merge-tree создан GitHub только для
+проверки; main не изменён. На Ubuntu 24.04/Python 3.12.14 прошли:
+
+- backend/capture/recognition Python jobs и все три PostgreSQL/S3 integration jobs;
+- frontend, browser E2E, operations, diagrams, source security scan;
+- сборка, HTTP smoke, CVE/license scan frontend-образа.
+
+Три серверных образа собираются, но их выпуск остановлен CVE/license gates.
+После перехода с Bookworm на закреплённый Trixie и установки доступных обновлений
+backend/capture/recognition имеют по 208 High/Critical package findings,
+44 уникальных CVE.
+Один Critical: `libxml2 / CVE-2026-6653`; Trivy не указывает исправленную версию
+для этих находок в данном дистрибутиве. Счётчик packages не равен числу независимых
+уязвимостей, а scanner severity не доказывает достижимость конкретного exploit.
+Отключать gate или добавлять общее исключение нельзя: нужен исправленный runtime
+либо отдельный проверяемый и утверждённый разбор применимости находок.
+
+License gate также требует разбора `liblzma5: none` и AGPL-3.0-or-later у
+`ultralytics` / `ultralytics-thop` в recognition.
+`none` здесь означает неполную классификацию сканера, а не установленный запрет
+использования. Владелец должен подтвердить условия, включая Ultralytics/веса.
+Постоянная [сводка сканирования](../scripts/ops/evidence/container-scan-summary.json)
+содержит SHA-256 отчётов, image ID и список CVE. Полные
+`vulnerabilities.json`, `licenses.json` и SBOM сохранены в artifacts
+`container-inspection-*` указанного run; срок хранения 14 дней. Временные ошибки
+первого CI (Node types, CPU index, окружение live E2E, шрифты и installer Trivy)
+исправлены, повторные соответствующие jobs прошли.
 
 Команда прогона из корня репозитория (DSN только изолированной тестовой БД):
 
@@ -90,7 +123,8 @@ RESTORE_TEST_DSN="$TEST_DATABASE_URL" make verify
 
 ## Проверки, Требующие Стенда
 
-1. Поднять изолированный staging по [runbook выпуска](runbooks/release.md):
+1. Закрыть CVE/license gates серверных образов, затем поднять изолированный
+   staging по [runbook выпуска](runbooks/release.md):
    согласованные image digests, TLS, DB roles, IAM и модель, без production данных.
 2. Проверить полный upload→claim→inference→S3→measurement→CSV и повтор с потерей lease.
 3. Выполнить [полный backup/restore](runbooks/backup-restore.md) БД и S3 в новый

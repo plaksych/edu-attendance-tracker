@@ -2,7 +2,8 @@
 
 Ветка: `production`. Исходный снимок: `cb34254` (`main`).
 Основание: техническое задание владельца от 23.09.2026.
-Программный срез: `0d515eb`; далее оформляется документация и передача PR.
+Прикладной verify-срез: `0d515eb`; последний проверенный CI-срез: `18e5b17`.
+[PR #6](https://github.com/plaksych/edu-attendance-tracker/pull/6) открыт.
 
 ## Сделано
 
@@ -26,7 +27,7 @@
 Итоговый `make verify` с PostgreSQL DSN прошёл: backend 78, capture 9,
 recognition 27, frontend 80 тестов, без пропусков.
 Lint, TS, mypy критичных модулей, OpenAPI drift, production build,
-18 ops guards и 35 отрицательных Compose cases прошли.
+20 ops guards и 35 отрицательных Compose cases прошли.
 Playwright: 15 сценариев в трёх движках.
 
 Native PostgreSQL 14.20: миграция заполненной схемы `0005`, лидерство/reconnect,
@@ -44,15 +45,23 @@ stale claims, точные FK, отдельный PostgreSQL-only dump/restore.
 `86db076`, `8933e0a`, `b6602a1`, `5f388a6`, `d43e364`, `0d515eb`.
 Чистый checkout обнаружил пропущенную зависимость `@types/node`; исправлено,
 `npm ci`/build и чистый backend+ops venv на hash locks проверены повторно.
-Последний общий verify прошёл. Следующие действия: документационный commit,
-push и PR `production → main`, проверка удалённого CI.
+Последний общий verify прошёл. Изменения отправлены в `production`, PR создан.
+В [CI run 35916443483](https://github.com/plaksych/edu-attendance-tracker/actions/runs/35916443483)
+прошли 11 jobs: все Python/integration/frontend, operations, diagrams, source
+security и frontend container. Три server container jobs остановлены CVE/license
+gates. Последняя неуспешная проверка: Trivy image scan и
+`python3 scripts/check_licenses.py licenses.json` для серверных образов.
+После обновления базы остаются 44 уникальных CVE без указанного исправления,
+в том числе Critical в libxml2, и несогласованные записи лицензий.
+Следующий шаг: проверить применимость находок и подготовить исправленный образ
+либо согласованное адресное обоснование исключения, затем staging и restore.
 Merge, Pages/deploy и изменение main не выполняются автоматически.
 
 Полный S3 restore, Linux runtime/egress, эксплуатационные TLS/IAM,
 размеченная выборка, лицензии весов и человеческая приёмка остаются отдельными
 условиями допуска. Точные статусы: [матрица готовности](production-readiness.md).
 
-Тяжёлые контейнеры локально не запускались. Временный PostgreSQL:
-`/tmp/attendance-production-pg`, loopback port 55439, только синтетические данные.
-После окончательной проверки: `pg_ctl -D /tmp/attendance-production-pg stop`.
+Тяжёлые контейнеры локально не запускались. Временный PostgreSQL
+`/tmp/attendance-production-pg` остановлен; проверочный worktree удалён.
+Локальный frontend для показа оставлен на `http://127.0.0.1:4180/`.
 Документы практики, исходные XLSX, секреты, .claude и приватные медиа не публикуются.
