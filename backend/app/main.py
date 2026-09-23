@@ -14,8 +14,8 @@ from app.api.v1 import router as api_v1_router
 from app.core.config import settings
 from app.core.object_storage import get_client
 from app.core.database import SessionLocal
-from app.core.http import RequestBoundary, http_error, validation_error
-from app.core import access  # Register object-scope guards.
+from app.core.http import RequestBoundary, http_error, validation_error, internal_error
+from app.core import access  # noqa: F401 - Register object-scope guards.
 
 
 class HealthRead(BaseModel):
@@ -103,10 +103,13 @@ app.add_middleware(
     allow_headers=["*"],
     allow_credentials=True,
 )
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts.split(","))
+app.add_middleware(
+    TrustedHostMiddleware, allowed_hosts=settings.trusted_hosts.split(",")
+)
 app.add_middleware(RequestBoundary)
 app.add_exception_handler(HTTPException, http_error)
 app.add_exception_handler(RequestValidationError, validation_error)
+app.add_exception_handler(Exception, internal_error)
 
 app.include_router(api_v1_router, prefix=settings.api_v1_prefix)
 
@@ -127,7 +130,7 @@ def ready():
     try:
         with SessionLocal() as db:
             revision = db.scalar(text("SELECT version_num FROM alembic_version"))
-            if revision != "0009":
+            if revision != "0010":
                 raise RuntimeError("Database migration required")
         if not get_client().bucket_exists(settings.minio_bucket):
             raise RuntimeError("Storage not provisioned")

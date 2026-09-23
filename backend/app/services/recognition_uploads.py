@@ -11,7 +11,7 @@ from uuid import uuid4
 from fastapi import UploadFile
 
 from app.core.config import settings
-from app.core.object_storage import get_client, get_presign_client
+from app.core.object_storage import get_client
 from app.models import RecognitionMediaType, RecognitionUpload
 from app.services.file_validation import validate_image, validate_video
 from app.core.security import utc
@@ -60,10 +60,16 @@ def describe_upload(file: UploadFile) -> UploadDescriptor:
     media_type, default_content_type = extension_info
     declared_type = (file.content_type or "").lower()
     declared_media_type = _MEDIA_BY_CONTENT_TYPE.get(declared_type)
-    if declared_type and declared_type != "application/octet-stream" and declared_media_type is None:
+    if (
+        declared_type
+        and declared_type != "application/octet-stream"
+        and declared_media_type is None
+    ):
         raise RecognitionUploadError("Неподдерживаемый Content-Type файла")
     if declared_media_type is not None and declared_media_type != media_type:
-        raise RecognitionUploadError("Расширение файла не соответствует его Content-Type")
+        raise RecognitionUploadError(
+            "Расширение файла не соответствует его Content-Type"
+        )
 
     file.file.seek(0, os.SEEK_END)
     size_bytes = file.file.tell()
@@ -116,13 +122,17 @@ def discard_upload(bucket: str, object_key: str) -> None:
 
 def upload_media_links(upload: RecognitionUpload) -> dict[str, str | int | None]:
     now = datetime.now(timezone.utc)
-    expires_at = utc(upload.created_at) + timedelta(days=settings.original_retention_days)
+    expires_at = utc(upload.created_at) + timedelta(
+        days=settings.original_retention_days
+    )
     source_url = None
     source_reason = None
     if now >= expires_at:
         source_reason = SOURCE_UNAVAILABLE
     else:
-        source_url, source_reason = checked_link(upload.original_bucket, upload.original_object_key)
+        source_url, source_reason = checked_link(
+            upload.original_bucket, upload.original_object_key
+        )
 
     result = upload.job.result if upload.job else None
     annotated_url = None
@@ -132,7 +142,9 @@ def upload_media_links(upload: RecognitionUpload) -> dict[str, str | int | None]
     elif result.media_expires_at is not None and now >= utc(result.media_expires_at):
         annotated_reason = "размеченный кадр удалён по сроку хранения"
     else:
-        annotated_url, annotated_reason = checked_link(result.annotated_bucket, result.annotated_object_key)
+        annotated_url, annotated_reason = checked_link(
+            result.annotated_bucket, result.annotated_object_key
+        )
 
     return {
         "source_url": source_url,

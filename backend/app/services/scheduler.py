@@ -30,7 +30,6 @@ from app.models import (
     Measurement,
     MeasurementStatus,
     MeasurementType,
-    Schedule,
     Session,
     SessionStatus,
 )
@@ -48,7 +47,9 @@ def _local_dt(day: date, moment) -> datetime:
     return datetime.combine(day, moment, tzinfo=_tz())
 
 
-def measurement_times(starts: datetime, ends: datetime, offset: timedelta) -> tuple[datetime, datetime]:
+def measurement_times(
+    starts: datetime, ends: datetime, offset: timedelta
+) -> tuple[datetime, datetime]:
     """Keep both observations inside the session, including short sessions."""
     duration = ends - starts
     if duration <= timedelta(0):
@@ -69,15 +70,23 @@ def ensure_measurements(db: DbSession) -> int:
     today = datetime.now(_tz()).date()
     horizon_end = today + timedelta(days=settings.schedule_horizon_days)
 
-    sessions = db.scalars(
-        select(Session)
-        .where(
-            Session.date >= today,
-            Session.date < horizon_end,
-            Session.status.in_([SessionStatus.scheduled, SessionStatus.in_progress]),
+    sessions = (
+        db.scalars(
+            select(Session)
+            .where(
+                Session.date >= today,
+                Session.date < horizon_end,
+                Session.status.in_(
+                    [SessionStatus.scheduled, SessionStatus.in_progress]
+                ),
+            )
+            .options(joinedload(Session.schedule), joinedload(Session.measurements))
+            .with_for_update(of=Session, skip_locked=True)
+            .execution_options(populate_existing=True)
         )
-        .options(joinedload(Session.schedule), joinedload(Session.measurements))
-    ).unique().all()
+        .unique()
+        .all()
+    )
 
     offset = timedelta(minutes=settings.measurement_offset_minutes)
     created = 0
@@ -85,7 +94,8 @@ def ensure_measurements(db: DbSession) -> int:
         existing = {m.type for m in session.measurements}
         after_start, before_end = measurement_times(
             _local_dt(session.date, session.schedule.starts_at),
-            _local_dt(session.date, session.schedule.ends_at), offset,
+            _local_dt(session.date, session.schedule.ends_at),
+            offset,
         )
         planned = {
             MeasurementType.after_start: after_start,
@@ -114,16 +124,20 @@ def ensure_camera_captures(db: DbSession) -> int:
 
     No-camera measurements remain available for manually uploaded materials.
     """
-    measurements = db.scalars(
-        select(Measurement)
-        .where(
-            Measurement.status == MeasurementStatus.scheduled,
-            ~Measurement.captures.any(),
-            ~Measurement.upload.has(),
+    measurements = (
+        db.scalars(
+            select(Measurement)
+            .where(
+                Measurement.status == MeasurementStatus.scheduled,
+                ~Measurement.captures.any(),
+                ~Measurement.upload.has(),
+            )
+            .options(joinedload(Measurement.session).joinedload(Session.schedule))
+            .with_for_update(of=Measurement, skip_locked=True)
         )
-        .options(joinedload(Measurement.session).joinedload(Session.schedule))
-        .with_for_update(of=Measurement, skip_locked=True)
-    ).unique().all()
+        .unique()
+        .all()
+    )
 
     created = 0
     for m in measurements:
@@ -154,6 +168,10 @@ def ensure_camera_captures(db: DbSession) -> int:
                     planned_at=m.planned_at,
                     duration_seconds=settings.capture_duration_seconds,
                     status=CaptureStatus.pending,
+                    role_snapshot=link.role.value,
+                    priority_snapshot=link.priority,
+                    zone_code_snapshot=link.zone_code,
+                    snapshot_origin="captured",
                 )
                 .on_conflict_do_nothing(constraint="uq_camera_captures_slot")
             )
@@ -167,14 +185,22 @@ def update_session_lifecycle(db: DbSession) -> None:
     now = datetime.now(_tz())
     today = now.date()
 
-    sessions = db.scalars(
-        select(Session)
-        .where(
-            Session.date <= today,
-            Session.status.in_([SessionStatus.scheduled, SessionStatus.in_progress]),
+    sessions = (
+        db.scalars(
+            select(Session)
+            .where(
+                Session.date <= today,
+                Session.status.in_(
+                    [SessionStatus.scheduled, SessionStatus.in_progress]
+                ),
+            )
+            .options(joinedload(Session.schedule))
+            .with_for_update(of=Session, skip_locked=True)
+            .execution_options(populate_existing=True)
         )
-        .options(joinedload(Session.schedule))
-    ).unique().all()
+        .unique()
+        .all()
+    )
 
     for session in sessions:
         starts = _local_dt(session.date, session.schedule.starts_at)
@@ -196,7 +222,8 @@ def reap_expired_leases(db: DbSession) -> None:
         ("recognition_jobs", "'processing'"),
     ):
         # Status enum types differ, so update each transition separately.
-        db.execute(text(f"""
+        db.execute(
+            text(f"""
             UPDATE {table} SET status = 'failed', worker_id = NULL,
                 claim_token = NULL, lease_until = NULL, error = 'attempts_exhausted',
                 updated_at = now()
@@ -204,8 +231,11 @@ def reap_expired_leases(db: DbSession) -> None:
             WHERE attempts >= :max_attempts AND (
                 status IN ('pending', 'retry_wait') OR
                 (status IN ({active}) AND (lease_until IS NULL OR lease_until <= now())))
-        """), {"max_attempts": settings.queue_max_attempts})
-        db.execute(text(f"""
+        """),
+            {"max_attempts": settings.queue_max_attempts},
+        )
+        db.execute(
+            text(f"""
             UPDATE {table} SET status = 'retry_wait', worker_id = NULL,
                 claim_token = NULL,
                 lease_until = now() + make_interval(secs =>
@@ -214,13 +244,18 @@ def reap_expired_leases(db: DbSession) -> None:
                 error = 'lease_expired', updated_at = now()
             WHERE status IN ({active}) AND (lease_until IS NULL OR lease_until <= now())
                 AND attempts < :max_attempts
-        """), {"max_attempts": settings.queue_max_attempts})
-        db.execute(text(f"""
+        """),
+            {"max_attempts": settings.queue_max_attempts},
+        )
+        db.execute(
+            text(f"""
             UPDATE {table} SET status = 'pending', worker_id = NULL,
                 claim_token = NULL, lease_until = NULL, updated_at = now()
             WHERE status = 'retry_wait' AND lease_until <= now()
                 AND attempts < :max_attempts
-        """), {"max_attempts": settings.queue_max_attempts})
+        """),
+            {"max_attempts": settings.queue_max_attempts},
+        )
     db.commit()
 
 

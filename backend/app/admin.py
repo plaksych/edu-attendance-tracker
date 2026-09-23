@@ -18,12 +18,24 @@ def main():
     if not re.fullmatch(r"[a-zA-Z0-9._-]{1,120}", args.username):
         parser.error("Недопустимое имя")
     password = getpass("Пароль (не менее 12 символов): ")
-    if len(password) < 12 or len(password) > 256 or password != getpass("Повторите пароль: "):
+    if (
+        len(password) < 12
+        or len(password) > 256
+        or password != getpass("Повторите пароль: ")
+    ):
         parser.error("Пароли не совпадают или длина вне допустимого диапазона")
     with SessionLocal() as db:
         if db.scalar(select(User.id).where(User.role == "admin")) is not None:
-            parser.error("Администратор уже существует; используйте управление доступом")
-        db.add(User(username=args.username.lower(), role="admin", password_hash=password_hasher.hash(password)))
+            parser.error(
+                "Администратор уже существует; используйте управление доступом"
+            )
+        db.add(
+            User(
+                username=args.username.lower(),
+                role="admin",
+                password_hash=password_hasher.hash(password),
+            )
+        )
         db.commit()
     print("Администратор создан")
 

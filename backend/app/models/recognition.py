@@ -29,9 +29,15 @@ class RecognitionUpload(Base):
     __table_args__ = (UniqueConstraint("measurement_id", name="uq_upload_measurement"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
-    session_id: Mapped[int | None] = mapped_column(ForeignKey("sessions.id", ondelete="RESTRICT"), index=True)
-    measurement_id: Mapped[int | None] = mapped_column(ForeignKey("measurements.id", ondelete="RESTRICT"))
+    owner_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    session_id: Mapped[int | None] = mapped_column(
+        ForeignKey("sessions.id", ondelete="RESTRICT"), index=True
+    )
+    measurement_id: Mapped[int | None] = mapped_column(
+        ForeignKey("measurements.id", ondelete="RESTRICT")
+    )
     content_sha256: Mapped[str | None] = mapped_column(String(64))
     filename: Mapped[str] = mapped_column(String(255))
     media_type: Mapped[RecognitionMediaType] = mapped_column(
@@ -48,7 +54,9 @@ class RecognitionUpload(Base):
     )
 
     jobs: Mapped[list["RecognitionJob"]] = relationship(
-        back_populates="upload", cascade="all, delete-orphan", order_by="RecognitionJob.id"
+        back_populates="upload",
+        cascade="all, delete-orphan",
+        order_by="RecognitionJob.id",
     )
 
     @property
@@ -118,7 +126,9 @@ class RecognitionResult(Base):
         ForeignKey("recognition_jobs.id", ondelete="CASCADE"), unique=True
     )
     people_count: Mapped[int] = mapped_column(Integer)
-    inference_metadata: Mapped[dict | None] = mapped_column(JSON().with_variant(JSONB(), "postgresql"))
+    inference_metadata: Mapped[dict | None] = mapped_column(
+        JSON().with_variant(JSONB(), "postgresql")
+    )
     detected_median: Mapped[float] = mapped_column(Float)
     detected_percentile_75: Mapped[float] = mapped_column(Float)
     detected_max: Mapped[int] = mapped_column(Integer)

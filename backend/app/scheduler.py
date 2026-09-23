@@ -19,13 +19,21 @@ def run_service(tick, lock_id: int, interval: int, stop=None, engine=None) -> No
     """Leadership and business SQL use the same dedicated physical connection."""
     stop = stop or threading.Event()
     owned_engine = engine is None
-    engine = engine or create_engine(settings.sqlalchemy_url, poolclass=NullPool,
-        connect_args={"connect_timeout": 5, "options": "-c statement_timeout=30000 -c lock_timeout=5000"})
+    engine = engine or create_engine(
+        settings.sqlalchemy_url,
+        poolclass=NullPool,
+        connect_args={
+            "connect_timeout": 5,
+            "options": "-c statement_timeout=30000 -c lock_timeout=5000",
+        },
+    )
     try:
         while not stop.is_set():
             try:
                 with engine.connect() as connection:
-                    acquired = connection.scalar(text("SELECT pg_try_advisory_lock(:key)"), {"key": lock_id})
+                    acquired = connection.scalar(
+                        text("SELECT pg_try_advisory_lock(:key)"), {"key": lock_id}
+                    )
                     pid = connection.scalar(text("SELECT pg_backend_pid()"))
                     connection.commit()
                     if acquired:
@@ -33,7 +41,10 @@ def run_service(tick, lock_id: int, interval: int, stop=None, engine=None) -> No
                             while not stop.is_set():
                                 if connection.invalidated:
                                     raise RuntimeError("leader_connection_invalidated")
-                                if connection.scalar(text("SELECT pg_backend_pid()")) != pid:
+                                if (
+                                    connection.scalar(text("SELECT pg_backend_pid()"))
+                                    != pid
+                                ):
                                     raise RuntimeError("leader_connection_changed")
                                 connection.commit()
                                 tick(connection)
@@ -42,13 +53,19 @@ def run_service(tick, lock_id: int, interval: int, stop=None, engine=None) -> No
                             try:
                                 if not connection.invalidated:
                                     connection.rollback()
-                                    connection.execute(text("SELECT pg_advisory_unlock(:key)"), {"key": lock_id})
+                                    connection.execute(
+                                        text("SELECT pg_advisory_unlock(:key)"),
+                                        {"key": lock_id},
+                                    )
                                     connection.commit()
                             finally:
                                 # Never return a possibly locked connection to a pool.
                                 connection.invalidate()
             except Exception:
-                logger.error("Service tick/leadership failed; reconnect and reacquire", exc_info=False)
+                logger.error(
+                    "Service tick/leadership failed; reconnect and reacquire",
+                    exc_info=False,
+                )
             stop.wait(interval)
     finally:
         if owned_engine:
@@ -64,7 +81,9 @@ def process_stop() -> threading.Event:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
-    run_service(run_tick, SCHEDULER_LOCK, settings.scheduler_interval_seconds, process_stop())
+    run_service(
+        run_tick, SCHEDULER_LOCK, settings.scheduler_interval_seconds, process_stop()
+    )
 
 
 if __name__ == "__main__":

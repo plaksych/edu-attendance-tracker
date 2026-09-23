@@ -3,8 +3,9 @@ from functools import lru_cache
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from sqlalchemy.engine import URL
+from sqlalchemy.engine import make_url
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -71,6 +72,8 @@ class Settings(BaseSettings):
     schedule_horizon_days: int = 14
     # Отступ замеров от границ занятия: после начала и до конца
     measurement_offset_minutes: int = 15
+    # Late material is accepted until this many seconds after the session ends.
+    measurement_input_grace_seconds: int = Field(default=3600, ge=0, le=604800)
     capture_duration_seconds: int = 20
     # Через сколько минут после planned_at незабранное задание записи считается потерянным
     capture_pending_timeout_minutes: int = 10
@@ -88,26 +91,58 @@ class Settings(BaseSettings):
             if self.semester_end is None:
                 raise ValueError("Production requires an explicit SEMESTER_END")
             if not self.session_secure or not self.minio_public_secure:
-                raise ValueError("Production requires Secure cookies and HTTPS media URLs")
-            if self.db_password == "attendance" and not self.database_url:
-                raise ValueError("Production database credentials must be configured")
-            if self.minio_access_key == "minioadmin" or self.minio_secret_key == "minioadmin":
+                raise ValueError(
+                    "Production requires Secure cookies and HTTPS media URLs"
+                )
+            try:
+                database = make_url(self.sqlalchemy_url)
+            except Exception:
+                raise ValueError("Invalid production database connection") from None
+            if (
+                database.drivername not in {"postgresql", "postgresql+psycopg2"}
+                or not database.username
+                or not database.password
+                or len(database.password) < 24
+            ):
+                raise ValueError(
+                    "Production requires an explicit scoped PostgreSQL account and strong password"
+                )
+            if not self.minio_public_endpoint:
+                raise ValueError(
+                    "Production requires an explicit public media endpoint"
+                )
+            if (
+                self.minio_access_key == "minioadmin"
+                or self.minio_secret_key == "minioadmin"
+                or len(self.minio_secret_key) < 24
+            ):
                 raise ValueError("Runtime must use a scoped storage account")
             if "*" in self.trusted_hosts or "*" in self.cors_origins:
                 raise ValueError("Explicit production hosts and origins are required")
+            if not self.cors_origins_list or any(
+                not origin.startswith("https://") for origin in self.cors_origins_list
+            ):
+                raise ValueError("Production origins must use HTTPS")
         return self
 
     @property
     def sqlalchemy_url(self) -> str:
         if self.database_url:
             return self.database_url
-        return URL.create("postgresql+psycopg2", username=self.db_user,
-                          password=self.db_password, host=self.db_host,
-                          port=self.db_port, database=self.db_name).render_as_string(hide_password=False)
+        return URL.create(
+            "postgresql+psycopg2",
+            username=self.db_user,
+            password=self.db_password,
+            host=self.db_host,
+            port=self.db_port,
+            database=self.db_name,
+        ).render_as_string(hide_password=False)
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        return [
+            origin.strip() for origin in self.cors_origins.split(",") if origin.strip()
+        ]
 
 
 @lru_cache

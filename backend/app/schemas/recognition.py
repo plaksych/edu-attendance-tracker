@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,7 +17,9 @@ class RecognitionUploadJobRead(BaseModel):
     attempts: int
     model_name: str
     model_version: str
-    sample_rate_fps: float = Field(description="Частота выборки кадров у видео", examples=[1.0])
+    sample_rate_fps: float = Field(
+        description="Частота выборки кадров у видео", examples=[1.0]
+    )
     confidence_threshold: float = Field(
         description="Минимальная уверенность детектора", examples=[0.35]
     )
@@ -47,11 +50,17 @@ class RecognitionUploadRead(BaseModel):
 
 class RecognitionEvaluationSummary(BaseModel):
     checked_materials: int = Field(description="Число материалов с ручным эталоном")
-    within_tolerance_count: int = Field(description="Число результатов в допустимой ошибке")
+    within_tolerance_count: int = Field(
+        description="Число результатов в допустимой ошибке"
+    )
     mean_absolute_error: float | None = Field(description="Средняя абсолютная ошибка")
-    median_absolute_error: float | None = Field(description="Медианная абсолютная ошибка")
+    median_absolute_error: float | None = Field(
+        description="Медианная абсолютная ошибка"
+    )
     max_absolute_error: int | None = Field(description="Максимальная абсолютная ошибка")
-    mean_relative_error: float | None = Field(description="Средняя относительная ошибка")
+    mean_relative_error: float | None = Field(
+        description="Средняя относительная ошибка"
+    )
 
 
 class RecognitionUploadMediaRead(BaseModel):
@@ -66,3 +75,36 @@ class RecognitionUploadMediaRead(BaseModel):
     expires_in_seconds: int = Field(
         description="Срок действия выданных ссылок", examples=[900]
     )
+
+
+class ParameterRange(BaseModel):
+    min: float
+    max: float
+
+
+class RecognitionCapabilities(BaseModel):
+    profile: Literal["server_inference"]
+    formats: list[str]
+    max_size_bytes: int
+    max_pixels: int
+    max_duration_seconds: float
+    max_video_dimension: int
+    sample_rate_fps: ParameterRange
+    confidence: ParameterRange
+
+
+class CorrectionCreated(BaseModel):
+    id: int
+    job_id: int
+    people_count: int
+
+
+class CorrectionRead(CorrectionCreated):
+    actor_id: int | None
+    reason: str
+    created_at: datetime
+
+
+class RecognitionHistoryRead(BaseModel):
+    jobs: list[RecognitionUploadJobRead]
+    corrections: list[CorrectionRead]

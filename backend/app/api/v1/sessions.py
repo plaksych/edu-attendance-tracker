@@ -27,7 +27,7 @@ def list_today(db: DbSession = Depends(get_db)):
     "/sessions",
     response_model=list[SessionRead],
     summary="Получить занятия на дату",
-    description="Формирует занятия по расписанию с учётом белой/зелёной недели и возвращает их состояние.",
+    description="Возвращает созданные планировщиком занятия и их состояние; чтение не создаёт записи.",
 )
 def list_by_date(
     session_date: date = Query(alias="date", description="Дата занятий"),

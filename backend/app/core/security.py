@@ -4,7 +4,8 @@ from secrets import compare_digest
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError, InvalidHashError
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request, Security
+from fastapi.security import APIKeyCookie
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -14,6 +15,11 @@ from app.models.security import AccessGrant, AuditEvent, LoginSession, User
 
 password_hasher = PasswordHasher(time_cost=3, memory_cost=65536, parallelism=1)
 _DUMMY_HASH = password_hasher.hash("not-a-valid-account-password")
+session_cookie = APIKeyCookie(
+    name=settings.session_cookie_name,
+    auto_error=False,
+    description="HttpOnly cookie, установленная POST /auth/login. Для изменений нужен X-CSRF-Token.",
+)
 
 
 def verify_password(encoded: str, password: str) -> bool:
@@ -31,13 +37,20 @@ def utc(value: datetime) -> datetime:
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
 
 
-def current_user(request: Request, db: Session = Depends(get_db)) -> User:
-    token = request.cookies.get(settings.session_cookie_name, "")
+def current_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    token: str | None = Security(session_cookie),
+) -> User:
     session = db.get(LoginSession, token_hash(token)) if token else None
     user = db.get(User, session.user_id) if session else None
-    if (not session or not user or not user.enabled
-            or session.auth_version != user.auth_version
-            or utc(session.expires_at) <= datetime.now(timezone.utc)):
+    if (
+        not session
+        or not user
+        or not user.enabled
+        or session.auth_version != user.auth_version
+        or utc(session.expires_at) <= datetime.now(timezone.utc)
+    ):
         raise HTTPException(401, "Требуется вход в систему")
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         csrf = request.headers.get("X-CSRF-Token", "")
@@ -47,9 +60,11 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     request.state.login_session = session
     db.info["audit_request"] = request
     if user.role == "teacher":
-        db.info["allowed_groups"] = tuple(db.scalars(
-            select(AccessGrant.group_id).where(AccessGrant.user_id == user.id)
-        ))
+        db.info["allowed_groups"] = tuple(
+            db.scalars(
+                select(AccessGrant.group_id).where(AccessGrant.user_id == user.id)
+            )
+        )
         db.info["user_id"] = user.id
     return user
 
@@ -59,6 +74,7 @@ def require_roles(*roles: str):
         if user.role not in roles:
             raise HTTPException(403, "Недостаточно прав")
         return user
+
     return dependency
 
 
@@ -68,10 +84,23 @@ def catalog_access(request: Request, user: User = Depends(current_user)):
     return user
 
 
-def audit(db: Session, request: Request, action: str, object_type: str,
-          object_id=None, reason=None, actor_id=None):
+def audit(
+    db: Session,
+    request: Request,
+    action: str,
+    object_type: str,
+    object_id=None,
+    reason=None,
+    actor_id=None,
+):
     user = getattr(request.state, "user", None)
-    db.add(AuditEvent(actor_id=actor_id if actor_id is not None else (user.id if user else None),
-                      action=action, object_type=object_type,
-                      object_id=str(object_id) if object_id is not None else None,
-                      reason=reason, request_id=request.state.request_id))
+    db.add(
+        AuditEvent(
+            actor_id=actor_id if actor_id is not None else (user.id if user else None),
+            action=action,
+            object_type=object_type,
+            object_id=str(object_id) if object_id is not None else None,
+            reason=reason,
+            request_id=request.state.request_id,
+        )
+    )

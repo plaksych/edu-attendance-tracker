@@ -15,6 +15,7 @@ from app.models import (
     MeasurementStatus,
     RecognitionJob,
     RecognitionStatus,
+    RecognitionUpload,
     Schedule,
     Session,
     SessionStatus,
@@ -41,12 +42,18 @@ def ensure_sessions_for_date(db: DbSession, target_date: date) -> None:
     Учитывает чередование недель: берутся пары «каждую неделю»
     плюс пары белой или зелёной недели — по чётности недели даты.
     """
-    if target_date < settings.semester_start or (settings.semester_end and target_date > settings.semester_end):
+    if target_date < settings.semester_start or (
+        settings.semester_end and target_date > settings.semester_end
+    ):
         return
     exception = db.get(CalendarException, target_date)
     if exception and not exception.teaching:
         return
-    weekday = exception.weekday if exception and exception.weekday else target_date.isoweekday()
+    weekday = (
+        exception.weekday
+        if exception and exception.weekday
+        else target_date.isoweekday()
+    )
     week = week_type_for_date(target_date)
     if exception and exception.week_type:
         week = WeekType(exception.week_type)
@@ -67,10 +74,20 @@ def ensure_sessions_for_date(db: DbSession, target_date: date) -> None:
     insert = pg_insert if db.bind.dialect.name == "postgresql" else sqlite_insert
     schedules = db.scalars(select(Schedule).where(Schedule.id.in_(missing))).all()
     for schedule in schedules:
-        db.execute(insert(Session).values(schedule_id=schedule.id, date=target_date,
-            expected_count_snapshot=schedule.group.students_count,
-            aggregation_mode_snapshot=(schedule.classroom.aggregation_mode.value if schedule.classroom else "single"))
-            .on_conflict_do_nothing(index_elements=["schedule_id", "date"]))
+        db.execute(
+            insert(Session)
+            .values(
+                schedule_id=schedule.id,
+                date=target_date,
+                expected_count_snapshot=schedule.group.students_count,
+                aggregation_mode_snapshot=(
+                    schedule.classroom.aggregation_mode.value
+                    if schedule.classroom
+                    else "single"
+                ),
+            )
+            .on_conflict_do_nothing(index_elements=["schedule_id", "date"])
+        )
     db.commit()
 
 
@@ -101,7 +118,11 @@ def get_session(db: DbSession, session_id: int, with_captures: bool = False) -> 
 
 def cancel_session(db: DbSession, session_id: int) -> Session:
     """Отменяет занятие вместе с незавершёнными замерами и заданиями."""
-    session = get_session(db, session_id, with_captures=True)
+    session = db.scalar(
+        select(Session).where(Session.id == session_id).with_for_update()
+    )
+    if session is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Занятие не найдено")
     if session.status == SessionStatus.finished:
         raise HTTPException(status.HTTP_409_CONFLICT, "Занятие уже завершено")
     if session.status == SessionStatus.cancelled:
@@ -118,23 +139,55 @@ def cancel_session(db: DbSession, session_id: int) -> Session:
             continue
         m.status = MeasurementStatus.cancelled
         m.completed_at = now
-        for capture in m.captures:
-            if capture.status in (
-                CaptureStatus.pending,
-                CaptureStatus.retry_wait,
-                CaptureStatus.claimed,
-                CaptureStatus.recording,
-                CaptureStatus.uploading,
-            ):
-                capture.status = CaptureStatus.cancelled
-                capture.updated_at = now
-            job = capture.recognition_job
-            if job is not None and job.status in (
-                RecognitionStatus.pending,
-                RecognitionStatus.retry_wait,
-                RecognitionStatus.processing,
-            ):
-                job.status = RecognitionStatus.cancelled
-                job.updated_at = now
+    captures = db.scalars(
+        select(CameraCapture)
+        .join(Measurement)
+        .where(
+            Measurement.session_id == session_id,
+            CameraCapture.status.in_(
+                (
+                    CaptureStatus.pending,
+                    CaptureStatus.retry_wait,
+                    CaptureStatus.claimed,
+                    CaptureStatus.recording,
+                    CaptureStatus.uploading,
+                )
+            ),
+        )
+        .with_for_update(of=CameraCapture)
+        .execution_options(populate_existing=True)
+    ).all()
+    for capture in captures:
+        capture.status = CaptureStatus.cancelled
+        capture.claim_token = capture.lease_until = capture.worker_id = None
+        capture.updated_at = now
+    capture_ids = (
+        select(CameraCapture.id)
+        .join(Measurement)
+        .where(Measurement.session_id == session_id)
+    )
+    upload_ids = select(RecognitionUpload.id).where(
+        RecognitionUpload.session_id == session_id
+    )
+    jobs = db.scalars(
+        select(RecognitionJob)
+        .where(
+            RecognitionJob.status.in_(
+                (
+                    RecognitionStatus.pending,
+                    RecognitionStatus.retry_wait,
+                    RecognitionStatus.processing,
+                )
+            ),
+            RecognitionJob.camera_capture_id.in_(capture_ids)
+            | RecognitionJob.upload_id.in_(upload_ids),
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).all()
+    for job in jobs:
+        job.status = RecognitionStatus.cancelled
+        job.claim_token = job.lease_until = job.worker_id = None
+        job.finished_at = job.updated_at = now
     db.commit()
     return get_session(db, session_id)

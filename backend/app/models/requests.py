@@ -19,11 +19,15 @@ class IdempotencyRecord(Base):
 class RecognitionCorrection(Base):
     __tablename__ = "recognition_corrections"
     id: Mapped[int] = mapped_column(primary_key=True)
-    job_id: Mapped[int] = mapped_column(ForeignKey("recognition_jobs.id", ondelete="RESTRICT"), index=True)
+    job_id: Mapped[int] = mapped_column(
+        ForeignKey("recognition_jobs.id", ondelete="RESTRICT"), index=True
+    )
     actor_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"))
     people_count: Mapped[int] = mapped_column(Integer)
     reason: Mapped[str] = mapped_column(String(500))
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
 
 class ImportPreview(Base):

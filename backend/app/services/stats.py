@@ -31,24 +31,29 @@ def _round(value, digits: int = 4):
 
 
 _COMPLETE = func.count(
-    case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.complete, 1))
+    case(
+        (AttendanceRecord.calculation_status == AttendanceCalculationStatus.complete, 1)
+    )
 )
 _PARTIAL = func.count(
-    case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.partial, 1))
+    case(
+        (AttendanceRecord.calculation_status == AttendanceCalculationStatus.partial, 1)
+    )
 )
 _FAILED = func.count(
     case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.failed, 1))
 )
-_VALID_RATE = (AttendanceRecord.expected_count > 0) & AttendanceRecord.detected_average.is_not(None)
-_WEIGHTED_RATE = func.sum(case((_VALID_RATE, AttendanceRecord.detected_average))) / func.nullif(
-    func.sum(case((_VALID_RATE, AttendanceRecord.expected_count))), 0)
+_VALID_RATE = (
+    AttendanceRecord.expected_count > 0
+) & AttendanceRecord.detected_average.is_not(None)
+_WEIGHTED_RATE = func.sum(
+    case((_VALID_RATE, AttendanceRecord.detected_average))
+) / func.nullif(func.sum(case((_VALID_RATE, AttendanceRecord.expected_count))), 0)
 
 
 def summary(db: DbSession) -> SummaryStats:
     today = current_local_date()
-    complete, partial, failed = db.execute(
-        select(_COMPLETE, _PARTIAL, _FAILED)
-    ).one()
+    complete, partial, failed = db.execute(select(_COMPLETE, _PARTIAL, _FAILED)).one()
     return SummaryStats(
         groups=db.scalar(select(func.count(Group.id))) or 0,
         teachers=db.scalar(select(func.count(Teacher.id))) or 0,
@@ -61,12 +66,12 @@ def summary(db: DbSession) -> SummaryStats:
         )
         or 0,
         sessions_finished=db.scalar(
-            select(func.count(Session.id)).where(Session.status == SessionStatus.finished)
+            select(func.count(Session.id)).where(
+                Session.status == SessionStatus.finished
+            )
         )
         or 0,
-        avg_attendance_rate=_round(
-            db.scalar(select(_WEIGHTED_RATE))
-        ),
+        avg_attendance_rate=_round(db.scalar(select(_WEIGHTED_RATE))),
         records_complete=complete or 0,
         records_partial=partial or 0,
         records_failed=failed or 0,
@@ -160,7 +165,13 @@ def discipline_stats(db: DbSession, discipline_id: int) -> EntityStats:
 
 def group_stats(db: DbSession, group_id: int) -> EntityStats:
     return _entity_stats(
-        db, Group, group_id, Schedule.group_id, Discipline, Schedule.discipline_id, "name"
+        db,
+        Group,
+        group_id,
+        Schedule.group_id,
+        Discipline,
+        Schedule.discipline_id,
+        "name",
     )
 
 

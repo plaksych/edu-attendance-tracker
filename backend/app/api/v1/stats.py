@@ -17,34 +17,82 @@ router = APIRouter(prefix="/stats", tags=["Статистика"])
 
 def csv_cell(value):
     text = "" if value is None else str(value)
-    return "'" + text if text.lstrip().startswith(("=", "+", "-", "@", "\t", "\r")) else text
+    return (
+        "'" + text
+        if text.lstrip().startswith(("=", "+", "-", "@", "\t", "\r"))
+        else text
+    )
 
 
-@router.get("/export.csv", summary="Выгрузить агрегаты занятий без медиа и персональных результатов")
-def export_attendance(date_from: date, date_to: date, group_id: int | None = None,
-                      db: DbSession = Depends(get_db)):
+@router.get(
+    "/export.csv",
+    summary="Выгрузить агрегаты занятий без медиа и персональных результатов",
+)
+def export_attendance(
+    date_from: date,
+    date_to: date,
+    group_id: int | None = None,
+    db: DbSession = Depends(get_db),
+):
     if date_to < date_from or (date_to - date_from).days > 366:
         raise HTTPException(422, "Период должен составлять не более 366 дней")
-    query = (select(Session.date, Group.name, Discipline.name, AttendanceRecord.expected_count,
-                    AttendanceRecord.detected_average, AttendanceRecord.attendance_rate,
-                    AttendanceRecord.calculation_status)
-             .join(AttendanceRecord, AttendanceRecord.session_id==Session.id)
-             .join(Schedule, Schedule.id==Session.schedule_id).join(Group, Group.id==Schedule.group_id)
-             .join(Discipline, Discipline.id==Schedule.discipline_id)
-             .where(Session.date>=date_from, Session.date<=date_to).order_by(Session.date, Group.name).limit(10001))
+    query = (
+        select(
+            Session.date,
+            Group.name,
+            Discipline.name,
+            AttendanceRecord.expected_count,
+            AttendanceRecord.detected_average,
+            AttendanceRecord.attendance_rate,
+            AttendanceRecord.calculation_status,
+        )
+        .join(AttendanceRecord, AttendanceRecord.session_id == Session.id)
+        .join(Schedule, Schedule.id == Session.schedule_id)
+        .join(Group, Group.id == Schedule.group_id)
+        .join(Discipline, Discipline.id == Schedule.discipline_id)
+        .where(Session.date >= date_from, Session.date <= date_to)
+        .order_by(Session.date, Group.name)
+        .limit(10001)
+    )
     if group_id is not None:
-        query = query.where(Group.id==group_id)
+        query = query.where(Group.id == group_id)
     rows = db.execute(query).all()
     if len(rows) > 10000:
         raise HTTPException(422, "Сузьте период: в выгрузке не более 10000 занятий")
     output = StringIO()
     writer = csv.writer(output)
-    writer.writerow(["date", "group", "discipline", "expected", "detected", "rate", "status", "timezone", "provenance"])
+    writer.writerow(
+        [
+            "date",
+            "group",
+            "discipline",
+            "expected",
+            "detected",
+            "rate",
+            "status",
+            "timezone",
+            "provenance",
+        ]
+    )
     for row in rows:
-        writer.writerow([csv_cell(row[0]), csv_cell(row[1]), csv_cell(row[2]), row[3], row[4], row[5],
-                         row[6].value, settings.timezone, "server_inference"])
-    return Response(content="\ufeff"+output.getvalue(), media_type="text/csv; charset=utf-8",
-                    headers={"Content-Disposition": 'attachment; filename="attendance.csv"'})
+        writer.writerow(
+            [
+                csv_cell(row[0]),
+                csv_cell(row[1]),
+                csv_cell(row[2]),
+                row[3],
+                row[4],
+                row[5],
+                row[6].value,
+                settings.timezone,
+                "server_inference",
+            ]
+        )
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="attendance.csv"'},
+    )
 
 
 @router.get(

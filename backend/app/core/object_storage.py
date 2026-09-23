@@ -29,7 +29,10 @@ def get_client() -> Minio:
         secret_key=settings.minio_secret_key,
         secure=settings.minio_secure,
         region="us-east-1",
-        http_client=PoolManager(timeout=Timeout(connect=3, read=15), retries=Retry(total=2, backoff_factor=0.5)),
+        http_client=PoolManager(
+            timeout=Timeout(connect=3, read=15),
+            retries=Retry(total=2, backoff_factor=0.5),
+        ),
     )
 
 

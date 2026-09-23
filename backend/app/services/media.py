@@ -41,13 +41,19 @@ def checked_link(bucket: str, key: str):
 
 
 def capture_media_links(db: DbSession, capture_id: int) -> dict:
-    capture = db.scalars(
-        select(CameraCapture)
-        .where(CameraCapture.id == capture_id)
-        .options(
-            joinedload(CameraCapture.recognition_job).joinedload(RecognitionJob.result)
+    capture = (
+        db.scalars(
+            select(CameraCapture)
+            .where(CameraCapture.id == capture_id)
+            .options(
+                joinedload(CameraCapture.recognition_job).joinedload(
+                    RecognitionJob.result
+                )
+            )
         )
-    ).unique().one_or_none()
+        .unique()
+        .one_or_none()
+    )
     if capture is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Запись не найдена")
 
@@ -60,7 +66,9 @@ def capture_media_links(db: DbSession, capture_id: int) -> dict:
         if now >= expires_at:
             video_reason = EXPIRED_REASON
         else:
-            video_url, video_reason = checked_link(capture.original_bucket, capture.original_object_key)
+            video_url, video_reason = checked_link(
+                capture.original_bucket, capture.original_object_key
+            )
     else:
         video_reason = "видео не записано"
 
@@ -72,7 +80,9 @@ def capture_media_links(db: DbSession, capture_id: int) -> dict:
     elif result.media_expires_at is not None and now >= utc(result.media_expires_at):
         annotated_reason = EXPIRED_REASON
     else:
-        annotated_url, annotated_reason = checked_link(result.annotated_bucket, result.annotated_object_key)
+        annotated_url, annotated_reason = checked_link(
+            result.annotated_bucket, result.annotated_object_key
+        )
 
     return {
         "video_url": video_url,

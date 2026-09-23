@@ -1,6 +1,9 @@
 import enum
 from datetime import date, datetime, time
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.models.catalog import Classroom
 
 from sqlalchemy import (
     Date,
@@ -44,7 +47,9 @@ class Schedule(Base):
     teacher_id: Mapped[int | None] = mapped_column(
         ForeignKey("teachers.id", ondelete="CASCADE"), nullable=True
     )
-    discipline_id: Mapped[int] = mapped_column(ForeignKey("disciplines.id", ondelete="CASCADE"))
+    discipline_id: Mapped[int] = mapped_column(
+        ForeignKey("disciplines.id", ondelete="CASCADE")
+    )
     classroom_id: Mapped[int | None] = mapped_column(
         ForeignKey("classrooms.id", ondelete="CASCADE"), nullable=True
     )
@@ -60,14 +65,20 @@ class Schedule(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "group_id", "weekday", "starts_at", "week_type", name="uq_schedule_group_slot"
+            "group_id",
+            "weekday",
+            "starts_at",
+            "week_type",
+            name="uq_schedule_group_slot",
         ),
     )
 
     group: Mapped["Group"] = relationship(back_populates="schedule_items")  # noqa: F821
     teacher: Mapped[Optional["Teacher"]] = relationship(back_populates="schedule_items")  # noqa: F821
     discipline: Mapped["Discipline"] = relationship(back_populates="schedule_items")  # noqa: F821
-    classroom: Mapped[Optional["Classroom"]] = relationship(back_populates="schedule_items")  # noqa: F821
+    classroom: Mapped[Optional["Classroom"]] = relationship(
+        back_populates="schedule_items"
+    )  # noqa: F821
     sessions: Mapped[list["Session"]] = relationship(back_populates="schedule")
 
 
@@ -77,7 +88,9 @@ class Session(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     expected_count_snapshot: Mapped[int | None] = mapped_column(Integer)
     aggregation_mode_snapshot: Mapped[str] = mapped_column(String(30), default="single")
-    schedule_id: Mapped[int] = mapped_column(ForeignKey("schedule.id", ondelete="RESTRICT"))
+    schedule_id: Mapped[int] = mapped_column(
+        ForeignKey("schedule.id", ondelete="RESTRICT")
+    )
     date: Mapped[date] = mapped_column(Date, index=True)
     status: Mapped[SessionStatus] = mapped_column(
         Enum(SessionStatus, name="session_status"), default=SessionStatus.scheduled
