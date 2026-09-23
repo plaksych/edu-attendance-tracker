@@ -113,8 +113,10 @@ git diff --check
 ```
 
 Renderer проверяет синтаксис всех Mermaid, формирует SVG/PNG и manifest hashes.
-Check повторно рендерит, сравнивает SVG bytes и проверяет source/PNG hashes manifest;
-PNG pixels зависят от browser/fonts. Подробности в [инструкции схем](diagrams/README.md).
+Check повторно рендерит, сравнивает подписи/структуру SVG и проверяет
+source/SVG/PNG hashes manifest, а также непустоту нового растра. Геометрия и
+PNG pixels зависят от browser/fonts. Negative tests запускаются через
+`npm --prefix docs/diagrams test`. Подробности в [инструкции схем](diagrams/README.md).
 Links проверяет локальные файловые ссылки только принадлежащих этому срезу docs,
 не remote URLs и не anchors. Визуально открыть каждую схему и проверить подписи,
 стрелки и масштаб; hash не заменяет визуальную проверку.

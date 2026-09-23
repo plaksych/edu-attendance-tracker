@@ -242,5 +242,7 @@ jobs:
       - run: npx --no-install playwright install --with-deps chromium
         working-directory: docs/diagrams
       - run: make diagrams-check
+      - run: npm test
+        working-directory: docs/diagrams
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with: {name: diagrams, path: docs/diagrams/rendered, if-no-files-found: error}

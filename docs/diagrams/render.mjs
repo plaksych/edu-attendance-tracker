@@ -19,10 +19,60 @@ const browser = await chromium.launch({
   headless: true,
 })
 const check = process.argv.includes('--check')
+const testGuards = process.argv.includes('--test-guards')
+if (testGuards && !check) throw new Error('--test-guards requires --check')
 const output = join(root, 'rendered')
 const sha = value => createHash('sha256').update(value).digest('hex')
 const baseline = check ? JSON.parse(await readFile(join(output, 'manifest.json'), 'utf8')) : undefined
 const records = []
+const assertIntegrity = (id, record, source, svg, png) => {
+  for (const [kind, bytes] of Object.entries({ source, svg, png })) {
+    if (!record || record[`${kind}_sha256`] !== sha(bytes)) throw new Error(`Stale or modified ${kind}: ${id}`)
+  }
+}
+const expectRejection = async (name, run) => {
+  try { await run() } catch { return }
+  throw new Error(`Guard accepted invalid input: ${name}`)
+}
+// This function also runs in Chromium; ignore geometry and line wrapping, not graph content.
+function svgSemantics(svg) {
+  // Match the renderer's HTML embedding, including entities in foreignObject labels.
+  const document = new DOMParser().parseFromString(svg, 'text/html')
+  const root = document.body.firstElementChild
+  if (root?.localName !== 'svg' || root.nextElementSibling) throw new Error('Invalid SVG')
+  const labels = [...root.querySelectorAll('text, foreignObject')].map(text => [
+    text.closest('[id]')?.id || '', text.textContent.replace(/\s+/gu, ''),
+  ]).filter(([, label]) => label)
+  if (!labels.length) throw new Error('SVG has no labels')
+  const structure = [...root.querySelectorAll('[id], path, line, polygon, polyline, rect, circle, ellipse, use')]
+    .map(element => [element.localName, ...['id', 'class', 'marker-start', 'marker-end', 'href']
+      .map(attribute => element.getAttribute(attribute) || '')])
+  const sorted = items => items.map(item => JSON.stringify(item)).sort()
+  return JSON.stringify({ labels: sorted(labels), structure: sorted(structure) })
+}
+async function verifyRaster(page, png, id) {
+  const pixels = await page.evaluate(async base64 => {
+    const blob = await (await fetch(`data:image/png;base64,${base64}`)).blob()
+    const bitmap = await createImageBitmap(blob)
+    try {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+      const context = canvas.getContext('2d')
+      context.drawImage(bitmap, 0, 0)
+      const { data } = context.getImageData(0, 0, bitmap.width, bitmap.height)
+      const colors = new Set()
+      let ink = 0
+      for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 3] < 128) continue
+        colors.add((data[i] >> 4) * 256 + (data[i + 1] >> 4) * 16 + (data[i + 2] >> 4))
+        if (Math.min(data[i], data[i + 1], data[i + 2]) < 240) ink++
+      }
+      return { width: bitmap.width, height: bitmap.height, ink, colors: colors.size }
+    } finally { bitmap.close() }
+  }, png.toString('base64'))
+  if (pixels.width < 50 || pixels.height < 50 || pixels.ink < 100 || pixels.colors < 3) {
+    throw new Error(`Blank PNG: ${id}: ${JSON.stringify(pixels)}`)
+  }
+}
 try {
   await mkdir(output, { recursive: true })
   const page = await browser.newPage({ viewport: { width: 1800, height: 1200 }, deviceScaleFactor: 1 })
@@ -36,10 +86,23 @@ try {
   for (const file of sources) {
     const source = await readFile(join(root, 'src', file), 'utf8')
     const id = file.replace('.mmd', '')
-    const rendered = await page.evaluate(async ({ source, id }) => {
+    const previous = check ? await readFile(join(output, `${id}.svg`), 'utf8') : undefined
+    if (check) {
+      const record = baseline.diagrams.find(item => item.id === id)
+      const savedPng = await readFile(join(output, `${id}.png`))
+      assertIntegrity(id, record, source, previous, savedPng)
+      if (testGuards && file === sources[0]) {
+        for (const kind of ['source', 'svg', 'png']) {
+          const changed = { source, svg: previous, png: savedPng }
+          changed[kind] = Buffer.concat([Buffer.from(changed[kind]), Buffer.from('tampered')])
+          await expectRejection(kind, () => assertIntegrity(id, record, changed.source, changed.svg, changed.png))
+        }
+      }
+    }
+    const rendered = await page.evaluate(async ({ source, id, testGuards }) => {
       mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'base',
         deterministicIds: true, deterministicIDSeed: id, handDrawnSeed: 42,
-        fontFamily: 'Arial, sans-serif',
+        fontFamily: testGuards ? 'monospace' : 'Arial, sans-serif',
         themeVariables: { primaryColor: '#e8f2ef', primaryTextColor: '#182b28',
           primaryBorderColor: '#477365', lineColor: '#56626c', secondaryColor: '#eef1f5',
           tertiaryColor: '#fff4d9', fontSize: '16px' },
@@ -65,19 +128,34 @@ try {
       const box = element.getBoundingClientRect()
       if (box.width < 50 || box.height < 50) throw new Error('Blank diagram')
       return { svg: element.outerHTML, width: Math.ceil(box.width), height: Math.ceil(box.height) }
-    }, { source, id })
+    }, { source, id, testGuards })
     const png = await page.locator('main svg').screenshot({ animations: 'disabled' })
-    if (png.length < 1000) throw new Error(`Blank PNG: ${id}`)
+    await verifyRaster(page, png, id)
+    const semantic = await page.evaluate(svgSemantics, rendered.svg)
     if (check) {
-      const previous = await readFile(join(output, `${id}.svg`), 'utf8')
-      if (previous !== rendered.svg) {
-        let at = 0
-        while (at < previous.length && previous[at] === rendered.svg[at]) at++
-        throw new Error(`Stale SVG: ${id}; first difference ${at}: ${previous.slice(at, at + 120)} / ${rendered.svg.slice(at, at + 120)}`)
+      const previousSemantic = await page.evaluate(svgSemantics, previous)
+      if (previousSemantic !== semantic) {
+        throw new Error(`SVG content/structure differs: ${id}; ${sha(previousSemantic)} / ${sha(semantic)}`)
       }
-      const record = baseline.diagrams.find(item => item.id === id)
-      if (!record || record.source_sha256 !== sha(source) || record.png_sha256 !== sha(await readFile(join(output, `${id}.png`)))) {
-        throw new Error(`Stale or modified PNG/source: ${id}`)
+      if (testGuards && file === sources[0]) {
+        for (const selector of ['text', 'path']) {
+          const changed = await page.evaluate(({ svg, selector }) => {
+            const document = new DOMParser().parseFromString(svg, 'image/svg+xml')
+            document.querySelector(selector).remove()
+            return new XMLSerializer().serializeToString(document)
+          }, { svg: rendered.svg, selector })
+          if (await page.evaluate(svgSemantics, changed) === semantic) throw new Error(`Missing ${selector} was not detected`)
+        }
+        const blank = await page.evaluate(() => {
+          const canvas = document.createElement('canvas')
+          canvas.width = canvas.height = 100
+          const context = canvas.getContext('2d')
+          context.fillStyle = 'white'
+          context.fillRect(0, 0, 100, 100)
+          return canvas.toDataURL('image/png').split(',')[1]
+        })
+        await expectRejection('blank PNG', () => verifyRaster(page, Buffer.from(blank, 'base64'), id))
+        console.log('PASS guards: changed source/SVG/PNG, missing text/path, blank raster rejected')
       }
     } else {
       await writeFile(join(output, `${id}.svg`), rendered.svg)
@@ -85,7 +163,7 @@ try {
     }
     records.push({ id, source_sha256: sha(source), svg_sha256: sha(rendered.svg), png_sha256: sha(png),
       width: rendered.width, height: rendered.height })
-    console.log(`${check ? 'CHECK' : 'RENDER'} ${id}: ${rendered.width}x${rendered.height}`)
+    console.log(`${check ? 'CHECK' : 'RENDER'} ${id}: ${rendered.width}x${rendered.height}; semantic=${sha(semantic)}; raster=nonblank${testGuards ? '; font=monospace' : ''}`)
   }
   if (!check) {
     const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()

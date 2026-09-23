@@ -2,6 +2,6 @@
   "name": "attendance-diagrams",
   "private": true,
   "type": "module",
-  "scripts": { "render": "node render.mjs", "check": "node render.mjs --check", "links": "node check-links.mjs" },
+  "scripts": { "render": "node render.mjs", "check": "node render.mjs --check", "test": "node render.mjs --check --test-guards", "links": "node check-links.mjs" },
   "devDependencies": { "mermaid": "11.17.2", "playwright": "1.63.0" }
 }
