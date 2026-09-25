@@ -86,6 +86,43 @@ jobs:
         if: always()
         run: docker compose -f docker-compose.test.yml down --volumes --remove-orphans
 
+  full-stack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      COMPOSE_PROJECT_NAME: attendance-pipeline-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_DISPOSABLE: 'true'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - run: sudo apt-get update && sudo apt-get install -y postgresql-client-16 ffmpeg libgl1 libseccomp2 restic
+      - run: python scripts/ops/tasks.py bootstrap --service backend
+      - run: python scripts/ops/tasks.py bootstrap --service recognition
+      - name: Verify actual Linux inference restrictions
+        run: .venv/recognition/bin/python recognition/tests/check_linux_sandbox.py
+        env: {PYTHONPATH: recognition}
+      - name: Provision pinned test weights (not a runtime download)
+        run: |
+          source=$(python -c 'import json; print(json.load(open("recognition/model-manifest.json"))["source"])')
+          curl --fail --location --retry 2 --max-time 120 "$source" -o "$RUNNER_TEMP/pipeline-model.pt"
+      - name: Start only disposable CI dependencies
+        run: |
+          docker compose -f docker-compose.test.yml up -d --wait
+          db_port=$(docker compose -f docker-compose.test.yml port db 5432 | cut -d: -f2)
+          s3_port=$(docker compose -f docker-compose.test.yml port minio 9000 | cut -d: -f2)
+          echo "QUEUE_TEST_DSN=postgresql://test_owner:ci-disposable-not-a-production-secret@127.0.0.1:${db_port}/attendance_test" >> "$GITHUB_ENV"
+          echo "CI_S3_ENDPOINT=127.0.0.1:${s3_port}" >> "$GITHUB_ENV"
+      - name: Real HTTP upload, image/video worker, report and joint restore
+        run: .venv/backend/bin/python scripts/check_full_stack.py --output artifacts/full-stack --recognition-python .venv/recognition/bin/python --model "$RUNNER_TEMP/pipeline-model.pt"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with: {name: full-stack-evidence, path: artifacts/full-stack, if-no-files-found: warn, retention-days: 14}
+      - name: Remove only this disposable CI project
+        if: always()
+        run: docker compose -f docker-compose.test.yml down --volumes --remove-orphans
+
   frontend:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
