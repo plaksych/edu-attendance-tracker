@@ -98,7 +98,7 @@ def api(env, log):
                 if child.poll() is not None:
                     raise AssertionError("API exited; inspect API log")
                 try:
-                    if client.get("/health").status_code == 200:
+                    if client.get("/health", timeout=0.5).status_code == 200:
                         break
                 except httpx.TransportError:
                     pass
