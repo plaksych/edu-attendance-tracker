@@ -1,0 +1,230 @@
+{
+  "run_url": "https://github.com/plaksych/edu-attendance-tracker/actions/runs/36135743956",
+  "head_sha": "6db50e277044c62b565cf4c583f8fc0afe2d47c0",
+  "event": "push",
+  "scanner": "Trivy 0.74.0",
+  "release_gate": "failed",
+  "services": {
+    "backend": {
+      "report_sha256": "6ba05d95feb724adaf05d7beebda60714d1f5e14b6378d27f7fdf61f9db221b4",
+      "image_id": "sha256:1844e560ebc0ba09732a51b0b812b578f4d7bac5393c41fd81f79ea4828ac8c8",
+      "findings": 213,
+      "unique_cves": [
+        "CVE-2025-69720",
+        "CVE-2026-16554",
+        "CVE-2026-16742",
+        "CVE-2026-29036",
+        "CVE-2026-36849",
+        "CVE-2026-37555",
+        "CVE-2026-52490",
+        "CVE-2026-54369",
+        "CVE-2026-58049",
+        "CVE-2026-64830",
+        "CVE-2026-64832",
+        "CVE-2026-64833",
+        "CVE-2026-64834",
+        "CVE-2026-64835",
+        "CVE-2026-66036",
+        "CVE-2026-66039",
+        "CVE-2026-66040",
+        "CVE-2026-66041",
+        "CVE-2026-66046",
+        "CVE-2026-6653",
+        "CVE-2026-67215",
+        "CVE-2026-67216",
+        "CVE-2026-70628",
+        "CVE-2026-70632",
+        "CVE-2026-74860",
+        "CVE-2026-75142",
+        "CVE-2026-75143",
+        "CVE-2026-75144",
+        "CVE-2026-75146",
+        "CVE-2026-76642",
+        "CVE-2026-76956",
+        "CVE-2026-76957",
+        "CVE-2026-78408",
+        "CVE-2026-78409",
+        "CVE-2026-78410",
+        "CVE-2026-86138",
+        "CVE-2026-86139",
+        "CVE-2026-86140",
+        "CVE-2026-86142",
+        "CVE-2026-86143",
+        "CVE-2026-86144",
+        "CVE-2026-87933",
+        "CVE-2026-88806",
+        "CVE-2026-88807",
+        "CVE-2026-93990",
+        "CVE-2026-9538",
+        "CVE-2026-96889"
+      ],
+      "critical": [
+        {
+          "package": "libxml2",
+          "id": "CVE-2026-6653",
+          "installed": "2.12.7+dfsg+really2.9.14-2.1+deb13u3"
+        }
+      ],
+      "with_reported_fix": 0,
+      "license_review": [
+        {
+          "package": "liblzma5",
+          "license": "none"
+        }
+      ]
+    },
+    "capture": {
+      "report_sha256": "cd0fe9e8215c8b7078007db45aeed52305da9e27cc60686c9df3099ba70ca5f4",
+      "image_id": "sha256:04421c4488996087c4b8dd3326811b897b10e8756773e7915f551e796ce6c848",
+      "findings": 213,
+      "unique_cves": [
+        "CVE-2025-69720",
+        "CVE-2026-16554",
+        "CVE-2026-16742",
+        "CVE-2026-29036",
+        "CVE-2026-36849",
+        "CVE-2026-37555",
+        "CVE-2026-52490",
+        "CVE-2026-54369",
+        "CVE-2026-58049",
+        "CVE-2026-64830",
+        "CVE-2026-64832",
+        "CVE-2026-64833",
+        "CVE-2026-64834",
+        "CVE-2026-64835",
+        "CVE-2026-66036",
+        "CVE-2026-66039",
+        "CVE-2026-66040",
+        "CVE-2026-66041",
+        "CVE-2026-66046",
+        "CVE-2026-6653",
+        "CVE-2026-67215",
+        "CVE-2026-67216",
+        "CVE-2026-70628",
+        "CVE-2026-70632",
+        "CVE-2026-74860",
+        "CVE-2026-75142",
+        "CVE-2026-75143",
+        "CVE-2026-75144",
+        "CVE-2026-75146",
+        "CVE-2026-76642",
+        "CVE-2026-76956",
+        "CVE-2026-76957",
+        "CVE-2026-78408",
+        "CVE-2026-78409",
+        "CVE-2026-78410",
+        "CVE-2026-86138",
+        "CVE-2026-86139",
+        "CVE-2026-86140",
+        "CVE-2026-86142",
+        "CVE-2026-86143",
+        "CVE-2026-86144",
+        "CVE-2026-87933",
+        "CVE-2026-88806",
+        "CVE-2026-88807",
+        "CVE-2026-93990",
+        "CVE-2026-9538",
+        "CVE-2026-96889"
+      ],
+      "critical": [
+        {
+          "package": "libxml2",
+          "id": "CVE-2026-6653",
+          "installed": "2.12.7+dfsg+really2.9.14-2.1+deb13u3"
+        }
+      ],
+      "with_reported_fix": 0,
+      "license_review": [
+        {
+          "package": "liblzma5",
+          "license": "none"
+        }
+      ]
+    },
+    "frontend": {
+      "report_sha256": "1e9b615ea150636c39907a45ccf6103d6f1137efe51ef6c0a572ad2dad9c4f46",
+      "image_id": "sha256:bf8d261969398cf5287b5ce28b7fb3e4934f245d92f81e2cfa50f8f7d3701c6a",
+      "findings": 0,
+      "unique_cves": [],
+      "critical": [],
+      "with_reported_fix": 0,
+      "license_review": []
+    },
+    "recognition": {
+      "report_sha256": "04a5e52b70d6e77d25acf560f05715aec932b615ba805cdf42d29ee4f963344a",
+      "image_id": "sha256:8ba90ae4735395ac22571ac94b407a4f99bafc9ad8cdf5b4888da62f7f0ee60e",
+      "findings": 213,
+      "unique_cves": [
+        "CVE-2025-69720",
+        "CVE-2026-16554",
+        "CVE-2026-16742",
+        "CVE-2026-29036",
+        "CVE-2026-36849",
+        "CVE-2026-37555",
+        "CVE-2026-52490",
+        "CVE-2026-54369",
+        "CVE-2026-58049",
+        "CVE-2026-64830",
+        "CVE-2026-64832",
+        "CVE-2026-64833",
+        "CVE-2026-64834",
+        "CVE-2026-64835",
+        "CVE-2026-66036",
+        "CVE-2026-66039",
+        "CVE-2026-66040",
+        "CVE-2026-66041",
+        "CVE-2026-66046",
+        "CVE-2026-6653",
+        "CVE-2026-67215",
+        "CVE-2026-67216",
+        "CVE-2026-70628",
+        "CVE-2026-70632",
+        "CVE-2026-74860",
+        "CVE-2026-75142",
+        "CVE-2026-75143",
+        "CVE-2026-75144",
+        "CVE-2026-75146",
+        "CVE-2026-76642",
+        "CVE-2026-76956",
+        "CVE-2026-76957",
+        "CVE-2026-78408",
+        "CVE-2026-78409",
+        "CVE-2026-78410",
+        "CVE-2026-86138",
+        "CVE-2026-86139",
+        "CVE-2026-86140",
+        "CVE-2026-86142",
+        "CVE-2026-86143",
+        "CVE-2026-86144",
+        "CVE-2026-87933",
+        "CVE-2026-88806",
+        "CVE-2026-88807",
+        "CVE-2026-93990",
+        "CVE-2026-9538",
+        "CVE-2026-96889"
+      ],
+      "critical": [
+        {
+          "package": "libxml2",
+          "id": "CVE-2026-6653",
+          "installed": "2.12.7+dfsg+really2.9.14-2.1+deb13u3"
+        }
+      ],
+      "with_reported_fix": 0,
+      "license_review": [
+        {
+          "package": "liblzma5",
+          "license": "none"
+        },
+        {
+          "package": "ultralytics",
+          "license": "AGPL-3.0-or-later"
+        },
+        {
+          "package": "ultralytics-thop",
+          "license": "AGPL-3.0-or-later"
+        }
+      ]
+    }
+  }
+}

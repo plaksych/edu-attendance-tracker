@@ -2,7 +2,7 @@
 
 Ветка: `production`. Исходный снимок: `cb34254` (`main`).
 Основание: техническое задание владельца от 23.09.2026.
-Прикладной verify-срез: `0d515eb`; последний проверенный CI-срез: `18e5b17`.
+Первый verify-срез: `0d515eb`; последний проверенный программный CI-срез: `6db50e2`.
 [PR #6](https://github.com/plaksych/edu-attendance-tracker/pull/6) открыт.
 
 ## Сделано
@@ -21,10 +21,14 @@
 - Эксплуатация: разные DB роли, guarded demo seed/reset, private storage,
   backup/restore tooling, hash locks, CI и ручной promotion.
 - Документация: API, runbooks, дизайн-система, 18 отрисованных схем, screenshots.
+- 25.09: единый лимит потоков ML в рабочем child; тестовый MinIO из проверенных
+  исходников; ограниченный Docker context; security update frontend runtime.
+- Сквозной Linux CI: HTTP→S3→YOLO→замеры→CSV, retry/replay без изменения истории,
+  общий backup/restore БД и S3 с чтением через восстановленный API.
 
 ## Проверки
 
-Итоговый `make verify` с PostgreSQL DSN прошёл: backend 78, capture 9,
+Первый `make verify` 23.09 с PostgreSQL DSN прошёл: backend 78, capture 9,
 recognition 27, frontend 80 тестов, без пропусков.
 Lint, TS, mypy критичных модулей, OpenAPI drift, production build,
 20 ops guards и 35 отрицательных Compose cases прошли.
@@ -39,6 +43,12 @@ stale claims, точные FK, отдельный PostgreSQL-only dump/restore.
 Это проверка исполнения, не оценка точности на аудиториях.
 Аудит закреплённых зависимостей: 0 известных advisories; container OS scan отдельно.
 
+25.09: добавлен regression test лимита потоков (recognition: 28 тестов в наборе)
+и guard сквозного стенда (ops: 21). Локально SQL-тесты без DSN пропускались;
+отдельные CI integration jobs прошли с PostgreSQL 16. Linux seccomp проверен
+настоящими системными вызовами, не mock. Повторный CPU image/video smoke прошёл
+на одном потоке, включая общую настройку рабочего процесса.
+
 ## Передача
 
 Тематические коммиты: `8aeb509`, `6ec7319`, `72c4aec`, `84d755d`,
@@ -46,18 +56,19 @@ stale claims, точные FK, отдельный PostgreSQL-only dump/restore.
 Чистый checkout обнаружил пропущенную зависимость `@types/node`; исправлено,
 `npm ci`/build и чистый backend+ops venv на hash locks проверены повторно.
 Последний общий verify прошёл. Изменения отправлены в `production`, PR создан.
-В [CI run 35916443483](https://github.com/plaksych/edu-attendance-tracker/actions/runs/35916443483)
-прошли 11 jobs: все Python/integration/frontend, operations, diagrams, source
-security и frontend container. Три server container jobs остановлены CVE/license
+В [CI run 36135748298](https://github.com/plaksych/edu-attendance-tracker/actions/runs/36135748298)
+прошли 12 jobs: все Python/integration/frontend, operations, diagrams, source
+security, frontend container и новый full-stack. Три server container jobs остановлены CVE/license
 gates. Последняя неуспешная проверка: Trivy image scan и
 `python3 scripts/check_licenses.py licenses.json` для серверных образов.
-После обновления базы остаются 44 уникальных CVE без указанного исправления,
+После обновления базы остаются 47 уникальных CVE без указанного исправления,
 в том числе Critical в libxml2, и несогласованные записи лицензий.
 Следующий шаг: проверить применимость находок и подготовить исправленный образ
-либо согласованное адресное обоснование исключения, затем staging и restore.
+либо согласованное адресное обоснование исключения, затем приёмка целевого staging.
 Merge, Pages/deploy и изменение main не выполняются автоматически.
 
-Полный S3 restore, Linux runtime/egress, эксплуатационные TLS/IAM,
+Сквозной restore и Linux inference sandbox подтверждены в CI.
+Эксплуатационные TLS/IAM, ограничения сети и контейнеров целевого сервера,
 размеченная выборка, лицензии весов и человеческая приёмка остаются отдельными
 условиями допуска. Точные статусы: [матрица готовности](production-readiness.md).
 

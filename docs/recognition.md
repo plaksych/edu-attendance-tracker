@@ -21,8 +21,10 @@ Unit-тест со stub-детектором проверяет pipeline, не �
 [browser Worker под subpath](../frontend/tests/browserRecognition-smoke.json),
 [настоящий UI image/video](../frontend/tests/browserRecognition-ui-smoke.json)
 и [server CPU image/video](../recognition/tests/model-smoke-evidence.json).
-Они подтверждают исполнение модели, но не качество подсчёта людей, S3/SQL
-интеграцию или Linux sandbox. Текущий CPU evidence использует Torch 2.13.0 и
+Они подтверждают исполнение модели, но не качество подсчёта людей.
+S3/SQL и Linux sandbox теперь проверяются отдельно в CI job `full-stack`:
+см. [сквозной сценарий](testing.md#сквозной-прогон-на-linux).
+Текущий CPU evidence использует Torch 2.13.0 и
 torchvision 0.28.0. Dependency audit зафиксировал 0 известных advisories, включая
 отдельную проверку upstream-версий CPU wheels; это не binary/OS audit и не
 доказательство отсутствия уязвимостей. Актуальный допуск: [readiness](production-readiness.md).
