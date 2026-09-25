@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     max_video_duration_seconds: int = Field(default=600, ge=1)
     max_decoded_bytes: int = Field(default=4_000_000_000, ge=1)
     inference_image_size: int = 960
+    inference_threads: int = Field(default=1, ge=1, le=8)
     inference_iou_threshold: float = 0.5
     inference_max_detections: int = 300
     max_sampled_frames: int = Field(default=180, ge=1, le=1800)

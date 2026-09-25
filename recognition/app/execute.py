@@ -47,11 +47,26 @@ class LocalStorage:
         shutil.copyfile(source, self.annotated)
 
 
+def configure_runtime() -> None:
+    import cv2
+    import torch
+    import ultralytics.utils
+    import ultralytics.utils.torch_utils
+
+    # select_device reapplies this value when constructing the predictor.
+    ultralytics.utils.NUM_THREADS = settings.inference_threads
+    ultralytics.utils.torch_utils.NUM_THREADS = settings.inference_threads
+    torch.set_num_threads(settings.inference_threads)
+    torch.set_num_interop_threads(1)
+    cv2.setNumThreads(settings.inference_threads)
+
+
 def main() -> None:
     apply_limits()
     request = json.loads(Path(sys.argv[1]).read_text())
     output = Path(sys.argv[2])
     try:
+        configure_runtime()
         # Imports happen after process resource limits and thread environment.
         from app.db import ClaimedJob, SourceContext
         from app.detector import PersonDetector

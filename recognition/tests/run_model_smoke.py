@@ -26,22 +26,14 @@ def installed_version(name: str) -> str | None:
 
 
 def child(kind: str, directory: Path) -> None:
-    from app.execute import LocalStorage, apply_limits
+    from app.execute import LocalStorage, apply_limits, configure_runtime
 
     apply_limits()
 
     import cv2
     import torch
-    import ultralytics.utils
-    import ultralytics.utils.torch_utils
 
-    # Ultralytics resets torch's thread count from this runtime setting in
-    # select_device; keep its value and PyTorch's actual pools at one thread.
-    ultralytics.utils.NUM_THREADS = 1
-    ultralytics.utils.torch_utils.NUM_THREADS = 1
-    torch.set_num_threads(1)
-    torch.set_num_interop_threads(1)
-    cv2.setNumThreads(1)
+    configure_runtime()
 
     from app.config import settings
     from app.db import ClaimedJob, SourceContext

@@ -60,6 +60,7 @@ Hash фиксирует байты, но не происхождение, без
 | MODEL_PATH | /models/yolov8n.pt; Compose монтирует /models/model.pt |
 | MODEL_SHA256 | Пустой hash не допускает inference |
 | INFERENCE_IMAGE_SIZE | 960 |
+| INFERENCE_THREADS | 1; допустимо 1–8, применяется к PyTorch, OpenCV и настройке Ultralytics |
 | INFERENCE_IOU_THRESHOLD | 0.5 |
 | INFERENCE_MAX_DETECTIONS | 300 |
 | MAX_SAMPLED_FRAMES | 180 |

@@ -45,6 +45,7 @@ def run_child(job, context, directory: str, heartbeat, stop):
         "model_path",
         "model_sha256",
         "inference_image_size",
+        "inference_threads",
         "inference_iou_threshold",
         "inference_max_detections",
         "max_sampled_frames",

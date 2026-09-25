@@ -7,7 +7,7 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import numpy as np
 
@@ -20,6 +20,34 @@ from app.runner import ChildFailure, LeaseLost, run_child
 
 
 class SecurityTests(unittest.TestCase):
+    def test_child_runtime_applies_thread_budget_to_all_pools(self):
+        from app.execute import configure_runtime
+
+        cv = SimpleNamespace(setNumThreads=Mock())
+        torch = SimpleNamespace(set_num_threads=Mock(), set_num_interop_threads=Mock())
+        torch_utils = SimpleNamespace(NUM_THREADS=16)
+        utils = SimpleNamespace(NUM_THREADS=16, torch_utils=torch_utils)
+        runtime = SimpleNamespace(utils=utils)
+        with (
+            patch.dict(
+                sys.modules,
+                {
+                    "cv2": cv,
+                    "torch": torch,
+                    "ultralytics": runtime,
+                    "ultralytics.utils": utils,
+                    "ultralytics.utils.torch_utils": torch_utils,
+                },
+            ),
+            patch.object(settings, "inference_threads", 2),
+        ):
+            configure_runtime()
+        torch.set_num_threads.assert_called_once_with(2)
+        torch.set_num_interop_threads.assert_called_once_with(1)
+        cv.setNumThreads.assert_called_once_with(2)
+        self.assertEqual(utils.NUM_THREADS, 2)
+        self.assertEqual(torch_utils.NUM_THREADS, 2)
+
     def test_immutable_keys_even_when_attempt_counter_reused(self):
         first = annotated_object_key(1, 1, "00000000-0000-0000-0000-000000000001")
         second = annotated_object_key(1, 1, "00000000-0000-0000-0000-000000000002")
