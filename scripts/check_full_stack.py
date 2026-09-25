@@ -26,6 +26,19 @@ ROOT = Path(__file__).resolve().parents[1]
 PASSWORD = "disposable-pipeline-test-password"
 
 
+def public_evidence(value):
+    """Omit queue ownership identifiers from published test evidence."""
+    if isinstance(value, dict):
+        return {
+            key: public_evidence(item)
+            for key, item in value.items()
+            if key != "claim_token"
+        }
+    if isinstance(value, list):
+        return [public_evidence(item) for item in value]
+    return value
+
+
 def check_endpoints(dsn, endpoint):
     from psycopg2.extensions import parse_dsn
 
@@ -573,7 +586,7 @@ def main():
         evidence["status"] = "passed"
     finally:
         (output / "evidence.json").write_text(
-            json.dumps(evidence, indent=2, default=str)
+            json.dumps(public_evidence(evidence), indent=2, default=str)
         )
         for bucket in reversed(buckets):
             if storage.bucket_exists(bucket):
