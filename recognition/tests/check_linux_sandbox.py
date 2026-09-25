@@ -67,6 +67,7 @@ def main():
     assert resource.getrlimit(resource.RLIMIT_AS) == (256 * 1024 * 1024,) * 2
     assert resource.getrlimit(resource.RLIMIT_FSIZE) == (1024 * 1024,) * 2
     assert resource.getrlimit(resource.RLIMIT_CORE) == (0, 0)
+    assert resource.getrlimit(resource.RLIMIT_NOFILE) == (128, 128)
     subprocess.run([sys.executable, __file__, "--descendant"], check=True, timeout=10)
 
 

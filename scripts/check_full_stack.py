@@ -405,11 +405,11 @@ def main():
                 "POLL_INTERVAL_SECONDS": "1",
                 "HEARTBEAT_INTERVAL_SECONDS": "1",
                 "MAX_SAMPLED_FRAMES": "3",
-                "INFERENCE_IMAGE_SIZE": "320",
+                "INFERENCE_IMAGE_SIZE": "960",
                 "MAX_ATTEMPTS": "1",
                 "JOB_TIMEOUT_SECONDS": "120",
                 "CPU_LIMIT_SECONDS": "90",
-                "MEMORY_LIMIT_MB": "4096",
+                "MEMORY_LIMIT_MB": "2304",
                 "OMP_NUM_THREADS": "1",
                 "OPENBLAS_NUM_THREADS": "1",
                 "MKL_NUM_THREADS": "1",
@@ -451,7 +451,7 @@ def main():
             ("empty.png", "image/png", image.getvalue()),
             ("empty.mp4", "video/mp4", video.read_bytes()),
         ]
-        identities, digests = [], []
+        identities, digests, job_ids = [], [], []
         with (
             api(env, output / "api.log") as client,
             process(
@@ -498,6 +498,7 @@ def main():
                     }
                 )
                 identities.append(identity)
+                job_ids.append(job["id"])
                 digests.append(media_checks(client, identity, content))
             aggregate(source_dsn, lesson_id)
             csv_path = f"/api/v1/stats/export.csv?date_from={date}&date_to={date}"
@@ -505,6 +506,38 @@ def main():
             assert report.status_code == 200 and "Pipeline fixture" in report.text
             assert len(report.text.strip().splitlines()) == 2
             (output / "attendance.csv").write_text(report.text)
+            retry_path = f"/api/v1/recognition/uploads/{identities[0]}/retry"
+            retry_headers = {"Idempotency-Key": uuid4().hex}
+            retry = client.post(retry_path, headers=retry_headers)
+            assert retry.status_code == 202, retry.text
+            retried = wait_result(client, identities[0], worker, manifest["sha256"])
+            assert retried["id"] != job_ids[0]
+            replay = client.post(retry_path, headers=retry_headers)
+            assert (
+                replay.status_code == 202
+                and replay.json()["job"]["id"] == retried["id"]
+            )
+            history = client.get(
+                f"/api/v1/recognition/uploads/{identities[0]}/history"
+            ).json()
+            assert len(history["jobs"]) == 2
+            assert all(job["status"] == "completed" for job in history["jobs"])
+            from app.core.database import SessionLocal
+            from app.models import Measurement
+            from app.services.aggregation import aggregate_ready_measurements
+
+            with SessionLocal() as db:
+                assert aggregate_ready_measurements(db) == 0
+                for measurement, job_id in zip(measurements, job_ids, strict=True):
+                    saved = db.get(Measurement, measurement)
+                    assert [
+                        source.recognition_job_id for source in saved.source_results
+                    ] == [job_id]
+            assert client.get(csv_path).text == report.text
+            digests[0] = media_checks(client, identities[0], originals[0][2])
+            evidence["checks"].append(
+                "Retry creates a new result; replay creates no third attempt; finalized measurement sources and CSV remain unchanged"
+            )
         evidence["checks"].append(
             "HTTP upload, replay, real image/video inference, signed media, private S3, aggregation and CSV passed"
         )

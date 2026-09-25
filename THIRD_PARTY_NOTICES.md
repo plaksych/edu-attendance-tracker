@@ -28,7 +28,9 @@ Ultralytics описывает AGPL-3.0 и Enterprise варианты; выбо
 
 `check_licenses.py` требует непустой Trivy inventory и блокирует AGPL/unknown/unlicensed до
 review. Это намеренный release gate, а не утверждение, что AGPL запрещена. В этой работе
-лицензионные исключения не добавлены. Container inventory ещё не получен: контейнеры не собирались.
+лицензионные исключения не добавлены. Серверные образы собраны на GitHub runner;
+инвентаризация выявила записи, требующие проверки владельцем. Результаты:
+[допуск кандидата](docs/production-readiness.md).
 
 ## Проверяемые evidence
 
@@ -71,8 +73,14 @@ CI дополнительно создаёт source/container CycloneDX SBOM и 
 ## Остаточные блокеры
 
 Native MinIO не установлен: владелец сообщил HTTP 410 для официального binary URL 2025.
-CI MinIO digest был реально разрешён через registry manifest, но pull/run/поддержка не проверены;
-это не reviewed production image. Production image env намеренно пуст, fixture digest нельзя
-переносить в deployment. Подтвердить доступный источник, checksum/signature и поддержку отдельно.
-Нет полного S3 restore, проверки container OS advisories или окончательного model/media/license
-допуска. Нельзя объявлять release clean по одному успешному npm audit или DB restore.
+25 сентября 2026 прежний CI-образ MinIO перестал скачиваться: официальные registries
+возвращают отказ в доступе. Тестовый стенд собирает MinIO из исходников релиза
+`RELEASE.2025-10-15T17-29-55Z`, commit `9e49d5e7a648f00e26f2246f4dc28e6b07f8c84a`.
+Архив проверяется по SHA-256, версии Go и Alpine закреплены digest;
+LICENSE включён в тестовый образ. Рецепт: [minio.Dockerfile](scripts/ci/minio.Dockerfile).
+Это не поддерживаемый production-дистрибутив. Production image env намеренно пуст:
+владелец должен выбрать источник, поддержку и условия использования хранилища.
+
+Container OS scan выполнен и блокирует выпуск серверных образов; окончательного
+model/media/license допуска нет. Актуальные сквозные проверки и оставшиеся условия
+описаны в [матрице готовности](docs/production-readiness.md).
