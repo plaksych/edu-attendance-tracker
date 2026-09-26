@@ -121,6 +121,11 @@ try {
     }
     const size = (await stat(output)).size
     if (size > 20 * 1024 * 1024) throw new Error('Overview exceeds the 20 MiB repository budget')
+    const frames = [3, 12, 25, 40, 54, 65, 76, 85].map(t => `eq(n,${t * 24})`).join('+')
+    execFileSync('ffmpeg', ['-v', 'error', '-y', '-threads', '2', '-i', output,
+      '-filter_complex_threads', '1', '-filter_complex',
+      `[0:v]select='${frames}',setpts=N*2/TB,scale=960:-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse=dither=bayer`,
+      '-fps_mode', 'vfr', '-loop', '0', '-final_delay', '200', resolve(directory, 'preview.gif')])
     await writeFile(resolve(directory, 'manifest.json'), JSON.stringify({
       code_revision: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(),
       source: 'local frontend in static demo mode; synthetic fixtures only',

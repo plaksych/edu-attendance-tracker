@@ -1,8 +1,12 @@
 # Обзор проекта
 
-[![Обзор проекта на русском языке](poster.jpg)](project-overview-ru.mp4)
+[![Превью обзора проекта](preview.gif)](https://github.com/plaksych/edu-attendance-tracker/raw/refs/heads/production/docs/overview/project-overview-ru.mp4)
 
-**[Смотреть MP4 · 1:28](project-overview-ru.mp4)** · [К проекту](../../README.md)
+**[Скачать MP4 · 1:28](https://github.com/plaksych/edu-attendance-tracker/raw/refs/heads/production/docs/overview/project-overview-ru.mp4)** · [К проекту](../../README.md)
+
+Выше — анимированное превью из восьми глав. GitHub не воспроизводит этот MP4
+на странице файла; прямая ссылка скачивает полный ролик. Локально его можно
+открыть в обычном видеоплеере или через `index.html` с переходами по главам.
 
 Короткий обзор с русскими титрами, без звука. Показывает реальные экраны
 локального приложения на синтетических данных. Серверные процессы объясняются

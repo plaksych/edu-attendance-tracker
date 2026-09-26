@@ -24,6 +24,10 @@ for (const entries of [story.chapters, story.captions]) {
 const bytes = await readFile(resolve(directory, 'project-overview-ru.mp4'))
 assert.equal(createHash('sha256').update(bytes).digest('hex'), manifest.sha256)
 execFileSync('ffmpeg', ['-v', 'error', '-threads', '2', '-i', resolve(directory, 'project-overview-ru.mp4'), '-f', 'null', '-'], { stdio: 'pipe' })
+const preview = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-count_frames',
+  '-show_entries', 'stream=width,height,nb_read_frames:format=duration', '-of', 'json', resolve(directory, 'preview.gif')]))
+assert.equal(Number(preview.streams[0].nb_read_frames), story.chapters.length)
+assert.equal(Number(preview.format.duration), 16)
 
 const files = new Map([
   ['/', ['index.html', 'text/html; charset=utf-8']],
@@ -111,7 +115,7 @@ try {
     status: 'passed', sha256: manifest.sha256, duration: story.duration,
     decoded_entire_video: true, viewports: [390, 768, 1440],
     nonblank_video_frames: [3, 22, 47, 59, 85], chapters: story.chapters.length,
-    timeline_continuous: true, readme_mermaid: 'parsed', browser_errors: errors,
+    timeline_continuous: true, readme_mermaid: 'parsed', preview_frames: 8, browser_errors: errors,
   }, null, 2) + '\n')
   console.log('PASS: full video decode, SHA-256, timelines, responsive player, chapter navigation, nonblank frames and README diagram')
 } finally {

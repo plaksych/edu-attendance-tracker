@@ -11,9 +11,9 @@
 
 ## Проект За Полторы Минуты
 
-[![Смотреть обзор: интерфейс, путь данных и карта кода](docs/overview/poster.jpg)](docs/overview/project-overview-ru.mp4)
+[![Превью: интерфейс, путь данных и карта кода](docs/overview/preview.gif)](https://github.com/plaksych/edu-attendance-tracker/raw/refs/heads/production/docs/overview/project-overview-ru.mp4)
 
-**[Смотреть видео · 1:28](docs/overview/project-overview-ru.mp4)** ·
+**[Скачать полный ролик · MP4 · 1:28](https://github.com/plaksych/edu-attendance-tracker/raw/refs/heads/production/docs/overview/project-overview-ru.mp4)** ·
 [Главы и текст обзора](docs/overview/README.md)
 
 Русские титры, без звука. Экраны приложения сняты на учебных данных;
