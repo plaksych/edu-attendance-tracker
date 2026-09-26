@@ -10,9 +10,11 @@ from datetime import datetime, timedelta, timezone
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session as DbSession, joinedload
 from sqlalchemy import select
+from minio.error import S3Error
 
 from app.core.config import settings
-from app.core.object_storage import get_presign_client
+from app.core.object_storage import get_client, get_presign_client
+from app.core.security import utc
 from app.models import CameraCapture, RecognitionJob
 
 EXPIRED_REASON = "медиа удалено по сроку хранения"
@@ -26,14 +28,32 @@ def _presign(bucket: str, key: str) -> str:
     )
 
 
+def checked_link(bucket: str, key: str):
+    try:
+        get_client().stat_object(bucket, key)
+    except S3Error as exc:
+        if exc.code in {"NoSuchKey", "NoSuchObject", "NoSuchBucket"}:
+            return None, "Файл отсутствует в хранилище"
+        raise HTTPException(503, "Хранилище временно недоступно") from None
+    except Exception:
+        raise HTTPException(503, "Хранилище временно недоступно") from None
+    return _presign(bucket, key), None
+
+
 def capture_media_links(db: DbSession, capture_id: int) -> dict:
-    capture = db.scalars(
-        select(CameraCapture)
-        .where(CameraCapture.id == capture_id)
-        .options(
-            joinedload(CameraCapture.recognition_job).joinedload(RecognitionJob.result)
+    capture = (
+        db.scalars(
+            select(CameraCapture)
+            .where(CameraCapture.id == capture_id)
+            .options(
+                joinedload(CameraCapture.recognition_job).joinedload(
+                    RecognitionJob.result
+                )
+            )
         )
-    ).unique().one_or_none()
+        .unique()
+        .one_or_none()
+    )
     if capture is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Запись не найдена")
 
@@ -42,11 +62,13 @@ def capture_media_links(db: DbSession, capture_id: int) -> dict:
     video_reason = None
     if capture.original_object_key and capture.original_bucket:
         uploaded_at = capture.capture_finished_at or capture.created_at
-        expires_at = uploaded_at + timedelta(days=settings.original_retention_days)
+        expires_at = utc(uploaded_at) + timedelta(days=settings.original_retention_days)
         if now >= expires_at:
             video_reason = EXPIRED_REASON
         else:
-            video_url = _presign(capture.original_bucket, capture.original_object_key)
+            video_url, video_reason = checked_link(
+                capture.original_bucket, capture.original_object_key
+            )
     else:
         video_reason = "видео не записано"
 
@@ -55,10 +77,12 @@ def capture_media_links(db: DbSession, capture_id: int) -> dict:
     result = capture.recognition_job.result if capture.recognition_job else None
     if result is None:
         annotated_reason = "кадр ещё не сформирован"
-    elif result.media_expires_at is not None and now >= result.media_expires_at:
+    elif result.media_expires_at is not None and now >= utc(result.media_expires_at):
         annotated_reason = EXPIRED_REASON
     else:
-        annotated_url = _presign(result.annotated_bucket, result.annotated_object_key)
+        annotated_url, annotated_reason = checked_link(
+            result.annotated_bucket, result.annotated_object_key
+        )
 
     return {
         "video_url": video_url,

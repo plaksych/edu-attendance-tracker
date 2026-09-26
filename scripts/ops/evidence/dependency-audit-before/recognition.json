@@ -1,0 +1,461 @@
+{
+  "dependencies": [
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "vulns": []
+    },
+    {
+      "name": "argon2-cffi",
+      "version": "25.1.0",
+      "vulns": []
+    },
+    {
+      "name": "argon2-cffi-bindings",
+      "version": "26.1.0",
+      "vulns": []
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "vulns": []
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "vulns": []
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.1",
+      "vulns": []
+    },
+    {
+      "name": "contourpy",
+      "version": "1.4.0",
+      "vulns": []
+    },
+    {
+      "name": "cycler",
+      "version": "0.12.1",
+      "vulns": []
+    },
+    {
+      "name": "filelock",
+      "version": "4.0.1",
+      "vulns": []
+    },
+    {
+      "name": "fonttools",
+      "version": "4.66.0",
+      "vulns": []
+    },
+    {
+      "name": "fsspec",
+      "version": "2026.9.0",
+      "vulns": []
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "vulns": []
+    },
+    {
+      "name": "jinja2",
+      "version": "3.1.6",
+      "vulns": []
+    },
+    {
+      "name": "kiwisolver",
+      "version": "1.5.1",
+      "vulns": []
+    },
+    {
+      "name": "markupsafe",
+      "version": "3.0.3",
+      "vulns": []
+    },
+    {
+      "name": "matplotlib",
+      "version": "3.11.2",
+      "vulns": []
+    },
+    {
+      "name": "minio",
+      "version": "7.2.15",
+      "vulns": []
+    },
+    {
+      "name": "mpmath",
+      "version": "1.3.0",
+      "vulns": []
+    },
+    {
+      "name": "networkx",
+      "version": "3.7",
+      "vulns": []
+    },
+    {
+      "name": "numpy",
+      "version": "2.2.6",
+      "vulns": []
+    },
+    {
+      "name": "opencv-python",
+      "version": "5.0.0.93",
+      "vulns": []
+    },
+    {
+      "name": "opencv-python-headless",
+      "version": "4.11.0.86",
+      "vulns": []
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "vulns": []
+    },
+    {
+      "name": "pandas",
+      "version": "3.0.6",
+      "vulns": []
+    },
+    {
+      "name": "pillow",
+      "version": "11.3.0",
+      "vulns": [
+        {
+          "id": "PYSEC-2026-165",
+          "fix_versions": [
+            "12.2.0"
+          ],
+          "aliases": [
+            "CVE-2026-42308",
+            "GHSA-wjx4-4jcj-g98j",
+            "BIT-pillow-2026-42308"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2250",
+          "fix_versions": [
+            "12.2.0"
+          ],
+          "aliases": [
+            "BIT-pillow-2026-40192",
+            "GHSA-whj4-6x5x-4v2j",
+            "CVE-2026-40192"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2253",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "GHSA-8v84-f9pq-wr9x",
+            "BIT-pillow-2026-54059",
+            "CVE-2026-54059"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2251",
+          "fix_versions": [
+            "12.2.0"
+          ],
+          "aliases": [
+            "CVE-2026-42309",
+            "GHSA-5xmw-vc9v-4wf2",
+            "BIT-pillow-2026-42309"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2255",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "GHSA-45hq-cxwh-f6vc",
+            "CVE-2026-55379",
+            "BIT-pillow-2026-55379"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2257",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "GHSA-4x4j-2g7c-83w6",
+            "CVE-2026-55798"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2256",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "CVE-2026-55380",
+            "BIT-pillow-2026-55380",
+            "GHSA-phj9-mv4w-65pm"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2254",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "GHSA-5x94-69rx-g8h2",
+            "CVE-2026-54060",
+            "BIT-pillow-2026-54060"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2252",
+          "fix_versions": [
+            "12.2.0"
+          ],
+          "aliases": [
+            "BIT-pillow-2026-42311",
+            "CVE-2026-42311",
+            "GHSA-pwv6-vv43-88gr"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2249",
+          "fix_versions": [
+            "12.1.1"
+          ],
+          "aliases": [
+            "CVE-2026-25990",
+            "BIT-pillow-2026-25990",
+            "GHSA-cfh3-3jmp-rvhc"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-2874",
+          "fix_versions": [
+            "12.2.0"
+          ],
+          "aliases": [
+            "GHSA-r73j-pqj5-w3x7",
+            "BIT-pillow-2026-42310",
+            "CVE-2026-42310"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3453",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "CVE-2026-59205",
+            "BIT-pillow-2026-59205",
+            "GHSA-9hw9-ch79-4vh6"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3451",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "BIT-pillow-2026-59199",
+            "CVE-2026-59199",
+            "GHSA-6r8x-57c9-28j4"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3454",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "BIT-pillow-2026-59197",
+            "GHSA-xj96-63gp-2gmr",
+            "CVE-2026-59197"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3495",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "GHSA-jjj6-mw9f-p565",
+            "CVE-2026-59200",
+            "BIT-pillow-2026-59200"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3496",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "GHSA-vjc4-5qp5-m44j",
+            "BIT-pillow-2026-59204",
+            "CVE-2026-59204"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3494",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "GHSA-fj7v-r99m-22gq",
+            "CVE-2026-59198",
+            "BIT-pillow-2026-59198"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3493",
+          "fix_versions": [
+            "12.3.0"
+          ],
+          "aliases": [
+            "CVE-2026-54058",
+            "GHSA-62p4-gmf7-7g93",
+            "BIT-pillow-2026-54058"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "psutil",
+      "version": "7.2.2",
+      "vulns": []
+    },
+    {
+      "name": "psycopg2-binary",
+      "version": "2.9.10",
+      "vulns": []
+    },
+    {
+      "name": "py-cpuinfo",
+      "version": "9.0.0",
+      "vulns": []
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "vulns": []
+    },
+    {
+      "name": "pycryptodome",
+      "version": "3.23.0",
+      "vulns": []
+    },
+    {
+      "name": "pydantic",
+      "version": "2.11.4",
+      "vulns": []
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.33.2",
+      "vulns": []
+    },
+    {
+      "name": "pydantic-settings",
+      "version": "2.9.1",
+      "vulns": []
+    },
+    {
+      "name": "pyparsing",
+      "version": "3.3.3",
+      "vulns": []
+    },
+    {
+      "name": "pyseccomp",
+      "version": "0.1.2",
+      "vulns": []
+    },
+    {
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "vulns": []
+    },
+    {
+      "name": "python-dotenv",
+      "version": "1.2.3",
+      "vulns": []
+    },
+    {
+      "name": "pyyaml",
+      "version": "6.0.3",
+      "vulns": []
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "vulns": []
+    },
+    {
+      "name": "scipy",
+      "version": "1.18.1",
+      "vulns": []
+    },
+    {
+      "name": "seaborn",
+      "version": "0.13.2",
+      "vulns": []
+    },
+    {
+      "name": "setuptools",
+      "version": "84.0.0",
+      "vulns": []
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "vulns": []
+    },
+    {
+      "name": "sympy",
+      "version": "1.14.0",
+      "vulns": []
+    },
+    {
+      "name": "torch",
+      "skip_reason": "Dependency not found on PyPI and could not be audited: torch (2.7.0+cpu)"
+    },
+    {
+      "name": "torchvision",
+      "skip_reason": "Dependency not found on PyPI and could not be audited: torchvision (0.22.0+cpu)"
+    },
+    {
+      "name": "tqdm",
+      "version": "4.70.1",
+      "vulns": []
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "vulns": []
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "vulns": []
+    },
+    {
+      "name": "ultralytics",
+      "version": "8.3.132",
+      "vulns": []
+    },
+    {
+      "name": "ultralytics-thop",
+      "version": "2.1.6",
+      "vulns": []
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "vulns": []
+    }
+  ],
+  "fixes": []
+}

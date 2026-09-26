@@ -1,0 +1,47 @@
+{
+  "scanner": "pip-audit==2.9.0 / npm audit",
+  "time": "2026-09-23T19:24:09.089606+00:00",
+  "scope": "locked packages; no application exploitability determination",
+  "representation": "Python reports omit upstream advisory prose. Package versions, advisory IDs, aliases, fix versions and coverage gaps are preserved. Full advisories are available at https://osv.dev/vulnerability/{id}.",
+  "checks": {
+    "backend": {
+      "exit_code": 1,
+      "lock_sha256": "817d8d692a878bc659265c0d21a866de4e39222cd8788694a6e58a374101b7b1",
+      "vulnerabilities": 37,
+      "unassessed": []
+    },
+    "capture": {
+      "exit_code": 1,
+      "lock_sha256": "5030dcb91aade6e366cc3ce58a2ac58efce782f8227f654275383af1d34668fb",
+      "vulnerabilities": 6,
+      "unassessed": []
+    },
+    "recognition": {
+      "exit_code": 1,
+      "lock_sha256": "33bf87364757449667d86a4fea6abb4f70de7e18ce42ba608ca4eb037123a2f5",
+      "vulnerabilities": 18,
+      "unassessed": [
+        "torch",
+        "torchvision"
+      ]
+    },
+    "ops": {
+      "exit_code": 1,
+      "lock_sha256": "015c0a001cd5bbfc18914e912f9af4a848877d1263ae8995983de81d309a158b",
+      "vulnerabilities": 1,
+      "unassessed": []
+    },
+    "frontend": {
+      "exit_code": 0,
+      "lock_sha256": "1e2f5cb313925edc80159dc7c2834bc3f502e49aed8bb3fe54811fbca3d2777d",
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      }
+    }
+  }
+}

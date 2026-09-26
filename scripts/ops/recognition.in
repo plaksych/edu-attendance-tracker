@@ -1,0 +1,4 @@
+-r ../../recognition/requirements.txt
+torch==2.13.0
+torchvision==0.28.0
+numpy==2.2.6

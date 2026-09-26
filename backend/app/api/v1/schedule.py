@@ -1,24 +1,92 @@
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
+from hashlib import sha256
+import json
+from uuid import uuid4
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession, joinedload
+from pydantic import BaseModel, Field
 
 from app.core.database import get_db
-from app.models import Schedule, Session
+from app.models import CalendarException, Schedule, Session
 from app.schemas.schedule import (
     ScheduleCreate,
     ScheduleImportResult,
     ScheduleRead,
     WeekTypeRead,
 )
-from app.services import schedule_import, timetable_import
+from app.services import schedule_import
+from app.services import import_preview
+from app.models.requests import ImportPreview
+from app.core.security import utc
 from app.services.weeks import current_local_date, week_type_for_date
 
 router = APIRouter(prefix="/schedule", tags=["Расписание"])
 
 XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+class CalendarInput(BaseModel):
+    teaching: bool = False
+    weekday: int | None = Field(default=None, ge=1, le=7)
+    week_type: str | None = Field(default=None, pattern="^(white|green|every)$")
+    reason: str = Field(min_length=3, max_length=300)
+
+
+class CalendarRead(CalendarInput):
+    day: date
+
+
+class ImportPreviewRead(BaseModel):
+    preview_id: str
+    expires_at: datetime
+    created: int
+    skipped: int
+    errors: list[str]
+    rows: list[import_preview.Lesson]
+
+
+@router.get("/calendar", response_model=list[CalendarRead])
+def list_calendar(db: DbSession = Depends(get_db)):
+    return [
+        {
+            "day": e.day,
+            "teaching": e.teaching,
+            "weekday": e.weekday,
+            "week_type": e.week_type,
+            "reason": e.reason,
+        }
+        for e in db.scalars(select(CalendarException).order_by(CalendarException.day))
+    ]
+
+
+@router.put("/calendar/{day}", response_model=CalendarRead)
+def set_calendar(day: date, payload: CalendarInput, db: DbSession = Depends(get_db)):
+    import_preview.lock_schedule(db)
+    if db.scalar(select(Session.id).where(Session.date == day).limit(1)):
+        raise HTTPException(
+            409, "На дату уже созданы занятия; меняйте их явно, история защищена"
+        )
+    item = db.get(CalendarException, day)
+    if item is None:
+        item = CalendarException(day=day)
+        db.add(item)
+    for field, value in payload.model_dump().items():
+        setattr(item, field, value)
+    db.commit()
+    return {"day": day, **payload.model_dump()}
 
 
 @router.get(
@@ -33,7 +101,12 @@ XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 def list_schedule(
     group_id: int | None = Query(default=None, description="ID учебной группы"),
     teacher_id: int | None = Query(default=None, description="ID преподавателя"),
-    weekday: int | None = Query(default=None, ge=1, le=7, description="ISO-день недели: 1 — понедельник, 7 — воскресенье"),
+    weekday: int | None = Query(
+        default=None,
+        ge=1,
+        le=7,
+        description="ISO-день недели: 1 — понедельник, 7 — воскресенье",
+    ),
     db: DbSession = Depends(get_db),
 ):
     query = select(Schedule).options(
@@ -63,9 +136,35 @@ def list_schedule(
     },
 )
 def create_schedule_item(payload: ScheduleCreate, db: DbSession = Depends(get_db)):
+    import_preview.lock_schedule(db)
     item = Schedule(**payload.model_dump())
     db.add(item)
     try:
+        db.flush()
+        lesson = import_preview.as_lesson(item)
+        # Compare against other entries before committing a manual insert.
+        db.expunge(item)
+        existing = db.scalars(select(Schedule).where(Schedule.id != item.id)).all()
+        for other in existing:
+            candidate = import_preview.as_lesson(other)
+            if (
+                lesson.weekday == candidate.weekday
+                and lesson.starts_at < candidate.ends_at
+                and candidate.starts_at < lesson.ends_at
+                and (
+                    lesson.week_type == candidate.week_type
+                    or "every" in {lesson.week_type, candidate.week_type}
+                )
+                and (
+                    lesson.group == candidate.group
+                    or (lesson.teacher and lesson.teacher == candidate.teacher)
+                    or (lesson.classroom and lesson.classroom == candidate.classroom)
+                )
+            ):
+                raise HTTPException(
+                    409, "Пересечение расписания группы, преподавателя или аудитории"
+                )
+        db.add(item)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -128,7 +227,9 @@ def download_template():
     return Response(
         content=schedule_import.build_template(),
         media_type=XLSX_MIME,
-        headers={"Content-Disposition": 'attachment; filename="schedule_template.xlsx"'},
+        headers={
+            "Content-Disposition": 'attachment; filename="schedule_template.xlsx"'
+        },
     )
 
 
@@ -141,7 +242,9 @@ def download_template():
         "или простой построчный шаблон. Создаёт недостающие справочники и записи расписания."
     ),
     responses={
-        400: {"description": "Файл не является `.xlsx` или содержит некорректные данные"},
+        400: {
+            "description": "Файл не является `.xlsx` или содержит некорректные данные"
+        },
     },
 )
 def import_schedule(file: UploadFile = File(...), db: DbSession = Depends(get_db)):
@@ -150,16 +253,81 @@ def import_schedule(file: UploadFile = File(...), db: DbSession = Depends(get_db
     Формат определяется автоматически: институтская сетка (группы по колонкам,
     белая/зелёная неделя) или простой построчный шаблон.
     """
+    raise HTTPException(
+        409, "Используйте /schedule/import/preview и подтверждение предпросмотра"
+    )
+
+
+@router.post("/import/preview", response_model=ImportPreviewRead)
+def preview_import(
+    request: Request, file: UploadFile = File(...), db: DbSession = Depends(get_db)
+):
     if not file.filename or not file.filename.lower().endswith(".xlsx"):
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, "Ожидается файл в формате .xlsx"
-        )
+        raise HTTPException(422, "Ожидается XLSX")
     try:
-        if timetable_import.looks_like_timetable(file.file):
-            return timetable_import.import_timetable(db, file.file)
-        return schedule_import.import_schedule(db, file.file)
+        lessons, errors = import_preview.parse(file.file)
+        accepted, skipped, conflicts = import_preview.conflicts(db, lessons)
     except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
+        raise HTTPException(422, str(exc)) from None
+    errors += conflicts
+    content = json.dumps(
+        {
+            "lessons": [lesson.model_dump(mode="json") for lesson in lessons],
+            "errors": errors,
+        },
+        ensure_ascii=True,
+    )
+    preview = ImportPreview(
+        id=str(uuid4()),
+        owner_id=request.state.user.id,
+        content=content,
+        fingerprint=sha256(content.encode()).hexdigest(),
+        expires_at=datetime.now(timezone.utc) + timedelta(minutes=30),
+    )
+    db.add(preview)
+    db.commit()
+    return {
+        "preview_id": preview.id,
+        "expires_at": preview.expires_at,
+        "created": len(accepted),
+        "skipped": skipped,
+        "errors": errors,
+        "rows": [lesson.model_dump(mode="json") for lesson in lessons],
+    }
+
+
+@router.post("/import/{preview_id}/confirm", response_model=ScheduleImportResult)
+def confirm_import(preview_id: str, request: Request, db: DbSession = Depends(get_db)):
+    import_preview.lock_schedule(db)
+    preview = db.scalar(
+        select(ImportPreview)
+        .where(
+            ImportPreview.id == preview_id,
+            ImportPreview.owner_id == request.state.user.id,
+        )
+        .with_for_update()
+    )
+    if not preview:
+        raise HTTPException(404, "Предпросмотр не найден")
+    data = json.loads(preview.content)
+    if preview.confirmed:
+        return ScheduleImportResult(created=0, skipped=len(data["lessons"]), errors=[])
+    if utc(preview.expires_at) <= datetime.now(timezone.utc):
+        raise HTTPException(409, "Предпросмотр истёк; загрузите файл повторно")
+    lessons = [import_preview.Lesson.model_validate(row) for row in data["lessons"]]
+    accepted, skipped, errors = import_preview.conflicts(db, lessons)
+    if data["errors"] or errors:
+        raise HTTPException(
+            409,
+            {
+                "message": "Импорт не применён; устраните ошибки",
+                "errors": data["errors"] + errors,
+            },
+        )
+    created = import_preview.apply(db, accepted)
+    preview.confirmed = True
+    db.commit()
+    return ScheduleImportResult(created=created, skipped=skipped, errors=[])
 
 
 @router.get(
@@ -169,7 +337,11 @@ def import_schedule(file: UploadFile = File(...), db: DbSession = Depends(get_db
     description="Возвращает белую или зелёную неделю для даты относительно `SEMESTER_START`.",
 )
 def get_week_type(
-    target_date: date | None = Query(default=None, alias="date", description="Дата проверки. Если не указана, используется текущая дата."),
+    target_date: date | None = Query(
+        default=None,
+        alias="date",
+        description="Дата проверки. Если не указана, используется текущая дата.",
+    ),
 ):
     """Белая или зелёная неделя для даты (по умолчанию — сегодня)."""
     resolved = target_date or current_local_date()

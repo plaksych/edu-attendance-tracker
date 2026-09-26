@@ -17,7 +17,10 @@ class Cursor:
 
     def execute(self, statement, params=None) -> None:
         self.calls.append((statement, params))
-        self.rowcount = next(self._rowcounts)
+        self.rowcount = next(self._rowcounts, 0)
+
+    def fetchone(self):
+        return None
 
 
 class Connection:
@@ -44,22 +47,29 @@ class CaptureQueueGuardTests(unittest.TestCase):
         database._connection = lambda: connection  # type: ignore[method-assign]
         return database, cursor
 
-    def test_completed_capture_does_not_enqueue_recognition_after_lease_loss(self) -> None:
+    def test_completed_capture_does_not_enqueue_recognition_after_lease_loss(
+        self,
+    ) -> None:
         database, cursor = self.database([0])
 
         completed = database.mark_completed(
-            15, "worker-1", "clips", "original/15.mp4", 1024, 20_000
+            15, "worker-1", "claim-1", "clips", "original/15.mp4", 1024, 20_000
         )
 
         self.assertFalse(completed)
-        self.assertEqual(len(cursor.calls), 1)
+        self.assertEqual(len(cursor.calls), 2)
         self.assertIn("status = 'uploading'", cursor.calls[0][0])
+        self.assertIn("claim_token = %s", cursor.calls[0][0])
+        self.assertIn("lease_until > clock_timestamp()", cursor.calls[0][0])
+        self.assertEqual(cursor.calls[0][1][-1], "claim-1")
 
-    def test_completed_capture_enqueues_recognition_only_after_state_update(self) -> None:
+    def test_completed_capture_enqueues_recognition_only_after_state_update(
+        self,
+    ) -> None:
         database, cursor = self.database([1, 1])
 
         completed = database.mark_completed(
-            15, "worker-1", "clips", "original/15.mp4", 1024, 20_000
+            15, "worker-1", "claim-1", "clips", "original/15.mp4", 1024, 20_000
         )
 
         self.assertTrue(completed)

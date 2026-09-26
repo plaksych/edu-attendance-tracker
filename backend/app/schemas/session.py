@@ -19,9 +19,14 @@ from app.schemas.schedule import ScheduleRead
 class RecognitionResultRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    people_count: int = Field(description="Итоговое количество людей на ролике", examples=[24])
+    people_count: int = Field(
+        description="Итоговое количество людей на ролике", examples=[24]
+    )
+    inference_metadata: dict | None = None
     detected_median: float = Field(description="Медиана по кадрам", examples=[24.0])
-    detected_percentile_75: float = Field(description="75-й перцентиль по кадрам", examples=[25.0])
+    detected_percentile_75: float = Field(
+        description="75-й перцентиль по кадрам", examples=[25.0]
+    )
     detected_max: int = Field(description="Максимум по кадрам", examples=[26])
     average_confidence: float | None = Field(
         description="Средняя уверенность детектора", examples=[0.82]
@@ -29,9 +34,15 @@ class RecognitionResultRead(BaseModel):
     count_stddev: float = Field(
         description="Стандартное отклонение числа людей по кадрам", examples=[0.5]
     )
-    sampled_frames: int = Field(description="Число проанализированных кадров", examples=[20])
-    source_frames: int = Field(description="Число кадров в исходном видео", examples=[750])
-    source_duration_ms: int = Field(description="Длительность исходного видео, мс", examples=[30000])
+    sampled_frames: int = Field(
+        description="Число проанализированных кадров", examples=[20]
+    )
+    source_frames: int = Field(
+        description="Число кадров в исходном видео", examples=[750]
+    )
+    source_duration_ms: int = Field(
+        description="Длительность исходного видео, мс", examples=[30000]
+    )
     representative_frame_ms: int = Field(
         description="Позиция репрезентативного кадра в ролике, мс", examples=[9500]
     )
@@ -57,8 +68,16 @@ class CaptureRead(BaseModel):
     status: CaptureStatus
     planned_at: datetime
     attempts: int
-    size_bytes: int | None = Field(description="Размер записанного ролика", examples=[2148000])
-    duration_ms: int | None = Field(description="Длительность ролика, мс", examples=[20000])
+    role_snapshot: str | None = None
+    priority_snapshot: int | None = None
+    zone_code_snapshot: str | None = None
+    snapshot_origin: str = "unknown"
+    size_bytes: int | None = Field(
+        description="Размер записанного ролика", examples=[2148000]
+    )
+    duration_ms: int | None = Field(
+        description="Длительность ролика, мс", examples=[20000]
+    )
     error: str | None
     original_object_key: str | None = Field(exclude=True)
     result: RecognitionResultRead | None = None
@@ -66,6 +85,17 @@ class CaptureRead(BaseModel):
     @computed_field(description="Записано ли исходное видео")
     def has_video(self) -> bool:
         return self.original_object_key is not None
+
+
+class MeasurementResultSourceRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    recognition_result_id: int
+    recognition_job_id: int | None = None
+    camera_capture_id: int | None = None
+    upload_id: int | None = None
+    people_count: int | None = None
+    used_for_count: bool = True
 
 
 class MeasurementRead(BaseModel):
@@ -83,6 +113,13 @@ class MeasurementRead(BaseModel):
     confidence: float | None = Field(description="Уверенность итога", examples=[0.82])
     aggregation_method: CameraAggregationMode
     error: str | None
+    source_reference_status: str | None = None
+    source_results: list[MeasurementResultSourceRead] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def provenance(self) -> str:
+        return "server_inference"
 
 
 class MeasurementDetail(MeasurementRead):
@@ -92,7 +129,9 @@ class MeasurementDetail(MeasurementRead):
 class AttendanceRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    expected_count: int = Field(description="Ожидаемая численность группы", examples=[28])
+    expected_count: int = Field(
+        description="Ожидаемая численность группы", examples=[28]
+    )
     after_start_count: int | None = Field(
         description="Замер после начала занятия", examples=[24]
     )
@@ -134,7 +173,8 @@ class CaptureMediaRead(BaseModel):
         description="Временная ссылка на исходный ролик; null, если видео недоступно"
     )
     video_unavailable_reason: str | None = Field(
-        description="Почему видео недоступно", examples=["медиа удалено по сроку хранения"]
+        description="Почему видео недоступно",
+        examples=["медиа удалено по сроку хранения"],
     )
     annotated_url: str | None = Field(
         description="Временная ссылка на размеченный кадр; null, если кадр недоступен"

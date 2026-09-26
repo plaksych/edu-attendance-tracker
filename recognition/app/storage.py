@@ -1,23 +1,15 @@
 """Хранилище MinIO: скачивание исходного видео и загрузка размеченных кадров."""
 
 import logging
+import time
+
+import urllib3
 
 from minio import Minio
 
 from app.config import settings
-from app.media_keys import annotated_camera_object_key, annotated_upload_object_key
 
 logger = logging.getLogger(__name__)
-
-
-def annotated_object_key(session_id: int, measurement_id: int, camera_id: int) -> str:
-    """Ключ размеченного кадра; повторная попытка перезаписывает тот же объект."""
-    return annotated_camera_object_key(session_id, measurement_id, camera_id)
-
-
-def upload_annotated_object_key(upload_id: int) -> str:
-    """Ключ размеченного кадра для файла, загруженного без камеры."""
-    return annotated_upload_object_key(upload_id)
 
 
 class ObjectStorage:
@@ -27,6 +19,9 @@ class ObjectStorage:
             access_key=settings.minio_access_key,
             secret_key=settings.minio_secret_key,
             secure=settings.minio_secure,
+            http_client=urllib3.PoolManager(
+                timeout=urllib3.Timeout(connect=5, read=15), retries=False
+            ),
         )
 
     def check_bucket(self) -> None:
@@ -43,7 +38,22 @@ class ObjectStorage:
             )
 
     def download(self, bucket: str | None, object_key: str, file_path: str) -> None:
-        self._client.fget_object(bucket or settings.minio_bucket, object_key, file_path)
+        response = self._client.get_object(bucket or settings.minio_bucket, object_key)
+        total = 0
+        deadline = time.monotonic() + min(60, settings.job_timeout_seconds)
+        try:
+            with open(file_path, "xb") as destination:
+                for chunk in response.stream(1024 * 1024):
+                    total += len(chunk)
+                    if (
+                        total > settings.max_file_size_mb * 1024 * 1024
+                        or time.monotonic() > deadline
+                    ):
+                        raise ValueError("source_download_limit")
+                    destination.write(chunk)
+        finally:
+            response.close()
+            response.release_conn()
 
     def upload(self, object_key: str, file_path: str, content_type: str) -> None:
         self._client.fput_object(

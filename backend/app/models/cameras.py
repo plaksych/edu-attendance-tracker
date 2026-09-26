@@ -1,6 +1,15 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -13,8 +22,8 @@ class Camera(Base):
     __tablename__ = "cameras"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    name: Mapped[str] = mapped_column(String(100), unique=True, index=True)
-    rtsp_url: Mapped[str] = mapped_column(String(1000))
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    rtsp_url: Mapped[str] = mapped_column(String(2000))
     # Сетевая зона / capture-узел, который имеет доступ к камере
     capture_group: Mapped[str] = mapped_column(String(100), default="default")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

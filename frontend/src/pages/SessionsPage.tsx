@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Measurement, Session, WeekType } from '../api/types'
 import { IconChevronLeft, IconChevronRight } from '../components/icons'
@@ -35,18 +35,23 @@ function MeasureChip({ measurement, label }: { measurement?: Measurement; label:
 export function SessionsPage() {
   const [params, setParams] = useSearchParams()
   const date = params.get('date') ?? today()
+  const groupFilter = params.get('group') ?? ''
+  const statusFilter = params.get('status') ?? ''
+  const search = params.get('q') ?? ''
   const [sessions, setSessions] = useState<Session[] | null>(null)
   const [week, setWeek] = useState<WeekType | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const navigate = useNavigate()
+  const sequence = useRef(0)
 
-  const setDate = (next: string) => setParams(next === today() ? {} : { date: next })
+  const filter = (key: string, value: string) => setParams(current => { const next = new URLSearchParams(current); if (value) next.set(key, value); else next.delete(key); return next })
+  const setDate = (next: string) => filter('date', next === today() ? '' : next)
 
   const load = useCallback(() => {
+    const current = ++sequence.current
     api
       .getSessions(date)
-      .then(setSessions)
-      .catch((e: Error) => setError(e.message))
+      .then(data => { if (sequence.current === current) { setSessions(data); setError(null) } })
+      .catch((e: Error) => { if (sequence.current === current) setError(e.message) })
   }, [date])
 
   useEffect(() => {
@@ -72,6 +77,8 @@ export function SessionsPage() {
   }, [sessions, load])
 
   const isToday = date === today()
+  const groups = [...new Map((sessions ?? []).map(s => [s.schedule.group.id, s.schedule.group])).values()]
+  const visible = (sessions ?? []).filter(s => (!groupFilter || String(s.schedule.group.id) === groupFilter) && (!statusFilter || s.status === statusFilter) && (!search || `${s.schedule.discipline.name} ${s.schedule.teacher?.full_name ?? ''} ${s.schedule.classroom?.number ?? ''}`.toLocaleLowerCase('ru-RU').includes(search.toLocaleLowerCase('ru-RU'))))
 
   return (
     <>
@@ -96,6 +103,7 @@ export function SessionsPage() {
             <IconChevronLeft />
           </button>
           <input
+            aria-label="Дата занятий"
             type="date"
             className="input"
             value={date}
@@ -117,8 +125,15 @@ export function SessionsPage() {
           )}
         </div>
       </header>
+      <div className="filter-bar">
+        <label className="field">Поиск<input className="input" type="search" value={search} onChange={e => filter('q', e.target.value)} placeholder="Дисциплина, преподаватель, аудитория" /></label>
+        <label className="field">Группа<select className="select" value={groupFilter} onChange={e => filter('group', e.target.value)}><option value="">Все группы</option>{groups.map(g => <option value={g.id} key={g.id}>{g.name}</option>)}</select></label>
+        <label className="field">Статус<select className="select" value={statusFilter} onChange={e => filter('status', e.target.value)}><option value="">Все статусы</option>{Object.entries(SESSION_STATUS).map(([value, info]) => <option key={value} value={value}>{info.label}</option>)}</select></label>
+        {(groupFilter || statusFilter || search) && <button className="btn btn--ghost" onClick={() => setParams({ date })}>Сбросить фильтры</button>}
+        {sessions && <span className="metric-note" role="status">Найдено: {visible.length}</span>}
+      </div>
 
-      {error && <div className="alert alert--error">{error}</div>}
+      {error && <div className="alert alert--error" role="alert">{error}<button className="btn btn--ghost" onClick={load}>Повторить</button></div>}
 
       <div className="table-wrap">
         {sessions === null ? (
@@ -139,18 +154,18 @@ export function SessionsPage() {
               </tr>
             </thead>
             <tbody>
-              {sessions.length === 0 && (
+              {visible.length === 0 && (
                 <tr>
                   <td colSpan={7} className="table__empty">
-                    На выбранную дату занятий нет
-                    <small>Занятия формируются автоматически по расписанию</small>
+                    {sessions.length ? 'По выбранным условиям занятий нет' : 'На выбранную дату занятий нет'}
+                    <small>{sessions.length ? 'Измените условия поиска или сбросьте фильтры' : 'Занятия появляются после планирования по расписанию'}</small>
                   </td>
                 </tr>
               )}
-              {sessions.map((s) => {
+              {visible.map((s) => {
                 const byType = new Map(s.measurements.map((m) => [m.type, m]))
                 return (
-                  <tr key={s.id} onClick={() => navigate(`/sessions/${s.id}`)}>
+                  <tr key={s.id}>
                     <td className="num">
                       {fmtTime(s.schedule.starts_at)}–{fmtTime(s.schedule.ends_at)}
                     </td>
@@ -158,7 +173,7 @@ export function SessionsPage() {
                       <div className="cell-main">{s.schedule.group.name}</div>
                     </td>
                     <td>
-                      <div className="cell-main">{s.schedule.discipline.name}</div>
+                      <Link className="cell-main text-link" to={`/sessions/${s.id}`} state={{ from: `/sessions?${params}` }}>{s.schedule.discipline.name}</Link>
                       <div className="cell-sub">
                         {s.schedule.teacher?.full_name ?? 'преподаватель не указан'}
                         {s.schedule.lesson_type ? ` · ${s.schedule.lesson_type}` : ''}

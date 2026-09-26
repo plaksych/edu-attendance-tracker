@@ -1,0 +1,16 @@
+{
+  "model": "yolov8n",
+  "filename": "yolov8n.pt",
+  "sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+  "source": "https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+  "source_status": "Official release asset fetched independently on 2026-09-25; SHA-256 matches the locally provisioned checkpoint",
+  "license": "Ultralytics AGPL-3.0 / commercial terms; distribution approval remains a release gate",
+  "runtime": "ultralytics==8.3.132",
+  "engine": "server",
+  "input": "BGR uint8 HWC frame; Ultralytics letterbox to configured image_size (default 960)",
+  "output": "Ultralytics Results boxes; person class id 0; confidence scores",
+  "postprocessing": "Ultralytics NMS; IoU 0.5, max_det 300, confidence from claimed job",
+  "sampling": "Requested fps bounded to 180 sampled frames; median count; representative frame nearest median and midpoint",
+  "provisioning": "Mount trusted weights read-only at MODEL_PATH and set MODEL_SHA256. No automatic download.",
+  "validation": "Official asset hash verified; real CPU image/video inference recorded in tests/model-smoke-evidence.json. Classroom accuracy and licensing approval are separate release gates."
+}

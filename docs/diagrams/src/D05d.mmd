@@ -1,0 +1,24 @@
+erDiagram
+  measurements ||--o{ measurement_result_sources : "RESTRICT история"
+  recognition_results ||--o{ measurement_result_sources : "RESTRICT точный result"
+  recognition_jobs ||--o| recognition_results : "не latest при чтении замера"
+  measurements {
+    int id PK
+    int final_people_count "NULL не ноль"
+    string source_reference_status "recorded, missing_input, legacy_unknown"
+  }
+  measurement_result_sources {
+    int measurement_id PK,FK
+    int recognition_result_id PK,FK
+    bool used_for_count "выбран для числа"
+  }
+  recognition_results {
+    int id PK
+    int recognition_job_id FK,UK
+    int people_count
+  }
+  recognition_jobs {
+    int id PK
+    int upload_id FK "XOR camera_capture_id"
+    int camera_capture_id FK
+  }

@@ -1,0 +1,5 @@
+ruff==0.11.13
+mypy==1.15.0
+types-psycopg2==2.9.21.20260911
+pip-audit==2.9.0
+pytest==9.0.3

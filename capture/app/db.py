@@ -7,6 +7,7 @@
 
 import logging
 import threading
+import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
@@ -20,6 +21,7 @@ CLAIM_SQL = """
     UPDATE camera_captures AS cc
     SET status = 'claimed',
         worker_id = %(worker_id)s,
+        claim_token = %(claim_token)s,
         lease_until = now() + make_interval(secs => %(lease_seconds)s),
         attempts = cc.attempts + 1,
         updated_at = now()
@@ -28,6 +30,7 @@ CLAIM_SQL = """
         FROM camera_captures AS target
         JOIN cameras AS cam ON cam.id = target.camera_id
         WHERE target.status = 'pending'
+          AND target.attempts < %(max_attempts)s
           AND cam.enabled
           AND cam.capture_group = %(capture_group)s
           AND target.planned_at <= now() + make_interval(secs => %(lookahead_seconds)s)
@@ -43,6 +46,7 @@ CLAIM_SQL = """
         cc.planned_at,
         cc.duration_seconds,
         cc.attempts,
+        cc.claim_token,
         (SELECT cam.rtsp_url FROM cameras AS cam WHERE cam.id = cc.camera_id) AS rtsp_url,
         (SELECT m.session_id FROM measurements AS m WHERE m.id = cc.measurement_id) AS session_id
 """
@@ -60,6 +64,7 @@ class CaptureTask:
     attempts: int
     rtsp_url: str
     session_id: int
+    claim_token: str
 
 
 class Database:
@@ -72,7 +77,11 @@ class Database:
 
     def _connection(self) -> psycopg2.extensions.connection:
         if self._conn is None or self._conn.closed:
-            self._conn = psycopg2.connect(self._dsn)
+            self._conn = psycopg2.connect(
+                self._dsn,
+                connect_timeout=5,
+                options="-c statement_timeout=10000 -c lock_timeout=3000",
+            )
             self._conn.autocommit = False
             logger.info("Установлено соединение с PostgreSQL")
         return self._conn
@@ -93,15 +102,17 @@ class Database:
                 conn = None
                 try:
                     conn = self._connection()
-                    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+                    with conn.cursor(
+                        cursor_factory=psycopg2.extras.RealDictCursor
+                    ) as cur:
                         result = action(cur)
                     conn.commit()
                     return result
-                except psycopg2.OperationalError as exc:
+                except (psycopg2.OperationalError, psycopg2.InterfaceError) as exc:
                     last_error = exc
                     self._drop_connection()
                     if attempt == 1:
-                        logger.warning("Потеряно соединение с PostgreSQL, переподключение: %s", exc)
+                        logger.warning("PostgreSQL connection lost; reconnecting")
                 except Exception:
                     if conn is not None and not conn.closed:
                         conn.rollback()
@@ -120,14 +131,30 @@ class Database:
         lookahead_seconds: int,
         lease_seconds: int,
         batch_size: int,
+        max_attempts: int = 3,
     ) -> list[CaptureTask]:
         """Захватывает пачку ближайших заданий своей группы одним UPDATE."""
 
+        token = str(uuid.uuid4())
+
         def action(cur: psycopg2.extensions.cursor) -> list[CaptureTask]:
+            cur.execute(
+                """SELECT cc.id, cc.measurement_id, cc.camera_id, cc.planned_at,
+                cc.duration_seconds, cc.attempts, cc.claim_token, cam.rtsp_url, m.session_id
+                FROM camera_captures cc JOIN cameras cam ON cam.id = cc.camera_id
+                JOIN measurements m ON m.id = cc.measurement_id
+                WHERE cc.claim_token = %s AND cc.worker_id = %s""",
+                (token, worker_id),
+            )
+            existing = cur.fetchall()
+            if existing:
+                return [CaptureTask(**row) for row in existing]
             cur.execute(
                 CLAIM_SQL,
                 {
                     "worker_id": worker_id,
+                    "claim_token": token,
+                    "max_attempts": max_attempts,
                     "capture_group": capture_group,
                     "lookahead_seconds": lookahead_seconds,
                     "lease_seconds": lease_seconds,
@@ -138,7 +165,9 @@ class Database:
 
         return self._run(action)
 
-    def mark_recording(self, capture_id: int, worker_id: str, lease_seconds: int) -> bool:
+    def mark_recording(
+        self, capture_id: int, worker_id: str, claim_token: str, lease_seconds: int
+    ) -> bool:
         """Переводит своё claimed-задание в recording и продлевает lease."""
 
         def action(cur: psycopg2.extensions.cursor) -> bool:
@@ -150,14 +179,17 @@ class Database:
                     lease_until = now() + make_interval(secs => %s),
                     updated_at = now()
                 WHERE id = %s AND worker_id = %s AND status = 'claimed'
+                  AND claim_token = %s AND lease_until > clock_timestamp()
                 """,
-                (lease_seconds, capture_id, worker_id),
+                (lease_seconds, capture_id, worker_id, claim_token),
             )
             return cur.rowcount == 1
 
         return self._run(action)
 
-    def heartbeat(self, capture_id: int, worker_id: str, lease_seconds: int) -> bool:
+    def heartbeat(
+        self, capture_id: int, worker_id: str, claim_token: str, lease_seconds: int
+    ) -> bool:
         """Продлевает lease активной записи; False означает потерю задания."""
 
         def action(cur: psycopg2.extensions.cursor) -> bool:
@@ -169,14 +201,15 @@ class Database:
                 WHERE id = %s
                   AND worker_id = %s
                   AND status IN ('recording', 'uploading')
+                  AND claim_token = %s AND lease_until > clock_timestamp()
                 """,
-                (lease_seconds, capture_id, worker_id),
+                (lease_seconds, capture_id, worker_id, claim_token),
             )
             return cur.rowcount == 1
 
         return self._run(action)
 
-    def mark_uploading(self, capture_id: int, worker_id: str) -> bool:
+    def mark_uploading(self, capture_id: int, worker_id: str, claim_token: str) -> bool:
         """Переводит своё recording-задание в статус uploading."""
 
         def action(cur: psycopg2.extensions.cursor) -> bool:
@@ -185,8 +218,9 @@ class Database:
                 UPDATE camera_captures
                 SET status = 'uploading', updated_at = now()
                 WHERE id = %s AND worker_id = %s AND status = 'recording'
+                  AND claim_token = %s AND lease_until > clock_timestamp()
                 """,
-                (capture_id, worker_id),
+                (capture_id, worker_id, claim_token),
             )
             return cur.rowcount == 1
 
@@ -196,6 +230,7 @@ class Database:
         self,
         capture_id: int,
         worker_id: str,
+        claim_token: str,
         bucket: str,
         object_key: str,
         size_bytes: int,
@@ -219,11 +254,27 @@ class Database:
                     error = NULL,
                     updated_at = now()
                 WHERE id = %s AND worker_id = %s AND status = 'uploading'
+                  AND claim_token = %s AND lease_until > clock_timestamp()
                 """,
-                (bucket, object_key, size_bytes, duration_ms, capture_id, worker_id),
+                (
+                    bucket,
+                    object_key,
+                    size_bytes,
+                    duration_ms,
+                    capture_id,
+                    worker_id,
+                    claim_token,
+                ),
             )
             if cur.rowcount != 1:
-                return False
+                cur.execute(
+                    """SELECT 1 FROM camera_captures cc
+                    JOIN recognition_jobs j ON j.camera_capture_id = cc.id
+                    WHERE cc.id = %s AND cc.claim_token = %s AND cc.status = 'completed'
+                      AND cc.original_object_key = %s""",
+                    (capture_id, claim_token, object_key),
+                )
+                return cur.fetchone() is not None
             cur.execute(
                 """
                 INSERT INTO recognition_jobs (camera_capture_id)
@@ -236,26 +287,26 @@ class Database:
 
         return self._run(action)
 
-    def release_claims(self, capture_ids: list[int], worker_id: str) -> int:
+    def release_claims(self, claims: list[tuple[int, str]], worker_id: str) -> int:
         """Возвращает ещё не начатые claimed-задания в очередь при остановке."""
-        if not capture_ids:
+        if not claims:
             return 0
 
         def action(cur: psycopg2.extensions.cursor) -> int:
-            cur.execute(
-                """
-                UPDATE camera_captures
-                SET status = 'pending',
-                    worker_id = NULL,
-                    lease_until = NULL,
-                    updated_at = now()
-                WHERE id = ANY(%s)
-                  AND worker_id = %s
-                  AND status = 'claimed'
-                """,
-                (capture_ids, worker_id),
-            )
-            return cur.rowcount
+            released = 0
+            for capture_id, token in claims:
+                cur.execute(
+                    """
+                    UPDATE camera_captures
+                    SET status = 'pending', worker_id = NULL, lease_until = NULL,
+                        updated_at = now()
+                    WHERE id = %s AND worker_id = %s AND status = 'claimed'
+                        AND claim_token = %s AND lease_until > clock_timestamp()
+                    """,
+                    (capture_id, worker_id, token),
+                )
+                released += cur.rowcount
+            return released
 
         return self._run(action)
 
@@ -263,6 +314,7 @@ class Database:
         self,
         capture_id: int,
         worker_id: str,
+        claim_token: str,
         error: str,
         retry_delay_seconds: int,
     ) -> bool:
@@ -279,14 +331,17 @@ class Database:
                 WHERE id = %s
                   AND worker_id = %s
                   AND status IN ('claimed', 'recording', 'uploading')
+                  AND claim_token = %s AND lease_until > clock_timestamp()
                 """,
-                (retry_delay_seconds, error, capture_id, worker_id),
+                (retry_delay_seconds, error[:2000], capture_id, worker_id, claim_token),
             )
             return cur.rowcount == 1
 
         return self._run(action)
 
-    def mark_failed(self, capture_id: int, worker_id: str, error: str) -> bool:
+    def mark_failed(
+        self, capture_id: int, worker_id: str, claim_token: str, error: str
+    ) -> bool:
         """Помечает задание проваленным после исчерпания попыток."""
 
         def action(cur: psycopg2.extensions.cursor) -> bool:
@@ -300,8 +355,9 @@ class Database:
                 WHERE id = %s
                   AND worker_id = %s
                   AND status IN ('claimed', 'recording', 'uploading')
+                  AND claim_token = %s AND lease_until > clock_timestamp()
                 """,
-                (error, capture_id, worker_id),
+                (error[:2000], capture_id, worker_id, claim_token),
             )
             return cur.rowcount == 1
 

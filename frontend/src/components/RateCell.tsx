@@ -23,8 +23,9 @@ export function RateCell({ rate, detail }: Props) {
         <span className="rate__value">{formatRate(rate)}</span>
         {detail && <span className="rate__detail">{detail}</span>}
       </div>
-      <div className="rate__bar">
-        <span style={{ width: `${Math.round(rate * 100)}%` }} />
+      {rate > 1 && <small>Выше численности группы</small>}
+      <div className="rate__bar" aria-hidden="true">
+        <span style={{ width: `${Math.min(100, Math.max(0, Math.round(rate * 100)))}%` }} />
       </div>
     </div>
   )

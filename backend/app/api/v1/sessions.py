@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session as DbSession
 
 from app.core.database import get_db
+from app.core.security import require_roles
 from app.schemas.session import CaptureMediaRead, SessionDetail, SessionRead
 from app.services import media as media_service
 from app.services import sessions as sessions_service
@@ -26,7 +27,7 @@ def list_today(db: DbSession = Depends(get_db)):
     "/sessions",
     response_model=list[SessionRead],
     summary="Получить занятия на дату",
-    description="Формирует занятия по расписанию с учётом белой/зелёной недели и возвращает их состояние.",
+    description="Возвращает созданные планировщиком занятия и их состояние; чтение не создаёт записи.",
 )
 def list_by_date(
     session_date: date = Query(alias="date", description="Дата занятий"),
@@ -51,6 +52,7 @@ def get_session(session_id: int, db: DbSession = Depends(get_db)):
 
 @router.post(
     "/sessions/{session_id}/cancel",
+    dependencies=[Depends(require_roles("admin", "operator"))],
     response_model=SessionRead,
     summary="Отменить занятие",
     description="Отменяет занятие и все его незавершённые замеры и задания записи.",

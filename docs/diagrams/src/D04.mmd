@@ -1,0 +1,13 @@
+flowchart LR
+  choose["Выбор режима"] --> static["Статика: VITE_STATIC_DATA=true"]
+  choose --> browser["Browser inference: тот же frontend"]
+  choose --> full["Полный стенд: VITE_STATIC_DATA=false"]
+  static --> fixtures["demo_fixture: синтетические данные в памяти"]
+  fixtures --> reset["Reload: сброс локальных изменений"]
+  browser --> model["Runtime + ONNX: загрузка с origin сайта"]
+  browser --> file["Файл на устройстве; Worker; browser_inference"]
+  full --> auth["Настоящий вход и права"]
+  auth --> isolated["Отдельные Compose project / БД / bucket / секреты"]
+  isolated --> worker["Recognition worker: server_inference"]
+  worker --> error["Нет проверенных весов: ошибка, не подстановка числа"]
+  note["Статика не вызывает production API. Изоляцию полного стенда необходимо подтвердить preflight."]

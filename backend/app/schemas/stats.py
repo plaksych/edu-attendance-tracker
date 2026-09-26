@@ -11,7 +11,9 @@ class SummaryStats(BaseModel):
     disciplines: int = Field(description="Количество дисциплин", examples=[18])
     classrooms: int = Field(description="Количество аудиторий", examples=[10])
     cameras: int = Field(description="Количество камер", examples=[14])
-    sessions_total: int = Field(description="Всего сформированных занятий", examples=[120])
+    sessions_total: int = Field(
+        description="Всего сформированных занятий", examples=[120]
+    )
     sessions_today: int = Field(description="Занятий на текущую дату", examples=[8])
     sessions_finished: int = Field(description="Завершённых занятий", examples=[56])
     avg_attendance_rate: float | None = Field(
@@ -33,7 +35,9 @@ class BreakdownItem(BaseModel):
     """Строка разбивки: посещаемость в разрезе группы/дисциплины/преподавателя."""
 
     id: int = Field(description="ID сущности в разбивке", examples=[1])
-    name: str = Field(description="Название сущности в разбивке", examples=["Базы данных"])
+    name: str = Field(
+        description="Название сущности в разбивке", examples=["Базы данных"]
+    )
     sessions: int = Field(description="Количество завершённых занятий", examples=[14])
     avg_rate: float | None = Field(description="Средняя посещаемость", examples=[0.83])
     avg_detected: float | None = Field(
@@ -45,7 +49,9 @@ class BreakdownItem(BaseModel):
 class EntityStats(BaseModel):
     id: int = Field(description="ID выбранной сущности", examples=[1])
     name: str = Field(description="Название выбранной сущности", examples=["ИВТ-21"])
-    sessions_finished: int = Field(description="Количество завершённых занятий", examples=[32])
+    sessions_finished: int = Field(
+        description="Количество завершённых занятий", examples=[32]
+    )
     avg_rate: float | None = Field(description="Средняя посещаемость", examples=[0.79])
     avg_detected: float | None = Field(
         description="Среднее число найденных людей",
@@ -60,17 +66,23 @@ class EntityStats(BaseModel):
     records_failed: int = Field(
         description="Занятий без успешных замеров", examples=[1]
     )
-    breakdown: list[BreakdownItem] = Field(description="Разбивка по связанным сущностям")
+    breakdown: list[BreakdownItem] = Field(
+        description="Разбивка по связанным сущностям"
+    )
 
 
 class TimelinePoint(BaseModel):
     date: Date = Field(description="Дата занятий", examples=["2026-07-04"])
-    avg_rate: float | None = Field(description="Средняя посещаемость за дату", examples=[0.86])
+    avg_rate: float | None = Field(
+        description="Средняя посещаемость за дату", examples=[0.86]
+    )
     avg_detected: float | None = Field(
         description="Среднее число найденных людей за дату",
         examples=[24.2],
     )
-    expected: int | None = Field(description="Ожидаемая численность группы", examples=[28])
+    expected: int | None = Field(
+        description="Ожидаемая численность группы", examples=[28]
+    )
 
 
 class GroupTimeline(BaseModel):

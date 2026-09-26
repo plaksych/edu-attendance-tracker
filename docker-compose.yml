@@ -1,134 +1,216 @@
+# Closed production base. Always select files explicitly; no implicit override.
+x-runtime: &runtime
+  restart: unless-stopped
+  init: true
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  pids_limit: 128
+  cpus: 1.0
+  mem_limit: 512m
+  tmpfs: ['/tmp:rw,noexec,nosuid,size=128m,mode=1777']
+  networks: [private]
+  logging:
+    driver: json-file
+    options: {max-size: 10m, max-file: "3"}
+
+x-backend-env: &backend-env
+  ENVIRONMENT: ${ENVIRONMENT:?Set production, demo or development explicitly}
+  DATABASE_URL: ${BACKEND_DATABASE_URL:?Set scoped backend DSN}
+  SCHEDULER_ENABLED: "false"
+  SESSION_SECURE: "true"
+  LOGIN_LIMIT: ${LOGIN_LIMIT:-8}
+  LOGIN_PEER_LIMIT: ${LOGIN_PEER_LIMIT:-1000}
+  LOGIN_WINDOW_SECONDS: ${LOGIN_WINDOW_SECONDS:-900}
+  TRUSTED_HOSTS: ${APP_HOST:?Set application hostname},backend,localhost
+  CORS_ORIGINS: https://${APP_HOST}:${HTTPS_PORT:-8443}
+  CAMERA_ENCRYPTION_KEY: ${CAMERA_ENCRYPTION_KEY:?Set Fernet key}
+  CAMERA_ALLOWED_CIDRS: ${CAMERA_ALLOWED_CIDRS:-}
+  MINIO_ENDPOINT: minio:9000
+  MINIO_SECURE: "false"
+  MINIO_PUBLIC_ENDPOINT: ${MEDIA_HOST:?Set media hostname}:${HTTPS_PORT:-8443}
+  MINIO_PUBLIC_SECURE: "true"
+  MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Set scoped storage key}
+  MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Set scoped storage secret}
+  MINIO_BUCKET: ${MINIO_BUCKET:?Set isolated bucket}
+  TIMEZONE: ${TIMEZONE:-Europe/Moscow}
+  SEMESTER_START: ${SEMESTER_START:?Set semester start}
+  SEMESTER_END: ${SEMESTER_END:?Set semester end}
+  MEASUREMENT_INPUT_GRACE_SECONDS: ${MEASUREMENT_INPUT_GRACE_SECONDS:-3600}
+  ORIGINAL_RETENTION_DAYS: ${ORIGINAL_RETENTION_DAYS:-30}
+  ANNOTATED_RETENTION_DAYS: ${ANNOTATED_RETENTION_DAYS:-90}
+  PRESIGN_EXPIRY_SECONDS: "120"
+  RECOGNITION_UPLOAD_MAX_SIZE_MB: "100"
+  UPLOAD_MAX_DURATION_SECONDS: "120"
+  RECOGNITION_MODEL_NAME: ${RECOGNITION_MODEL_NAME:?Set reviewed model name}
+  RECOGNITION_MODEL_VERSION: ${RECOGNITION_MODEL_VERSION:?Set model artifact version}
+
 services:
   db:
-    image: postgres:16-alpine
-    restart: unless-stopped
+    <<: *runtime
+    image: ${POSTGRES_IMAGE:?Set reviewed postgres image@sha256 digest}
+    user: "999:999"
+    mem_limit: 1g
     environment:
-      POSTGRES_DB: ${DB_NAME:-attendance}
-      POSTGRES_USER: ${DB_USER:-attendance}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-attendance}
-    volumes:
-      - pgdata:/var/lib/postgresql/data
+      POSTGRES_DB: ${DB_NAME:?Set isolated database name}
+      POSTGRES_USER: ${DB_ADMIN_USER:?Set database owner}
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:?Set database owner secret}
+    volumes: [pgdata:/var/lib/postgresql/data]
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=32m,mode=1777', '/var/run/postgresql:rw,nosuid,size=16m,mode=1777']
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-attendance} -d ${DB_NAME:-attendance}"]
-      interval: 5s
-      timeout: 5s
+      test: [CMD-SHELL, 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 10s
+      timeout: 3s
       retries: 10
-    ports:
-      - "5432:5432"
 
   minio:
-    image: quay.io/minio/minio:latest
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
+    <<: *runtime
+    image: ${MINIO_IMAGE:?Set reviewed MinIO image@sha256 digest}
+    user: "1000:1000"
+    command: [server, /data, --console-address, ':9001']
     environment:
-      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
-    volumes:
-      - miniodata:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-    ports:
-      - "9000:9000"
-      - "9001:9001"
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?Set separate storage administrator}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?Set storage administrator secret}
+      MINIO_BROWSER: "off"
+    volumes: [miniodata:/data]
+    mem_limit: 1g
 
   migrate:
-    build: ./backend
-    command: alembic upgrade head
+    <<: *runtime
+    image: ${BACKEND_IMAGE:?Set tested backend image@sha256 digest}
+    profiles: [ops]
+    restart: "no"
+    command: [alembic, upgrade, head]
     environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-attendance}
-      DB_USER: ${DB_USER:-attendance}
-      DB_PASSWORD: ${DB_PASSWORD:-attendance}
+      <<: *backend-env
+      DATABASE_URL: ${MIGRATION_DATABASE_URL:?Set schema-owner DSN}
     depends_on:
-      db:
-        condition: service_healthy
+      db: {condition: service_healthy}
+
+  storage-init:
+    <<: *runtime
+    image: ${BACKEND_IMAGE:?Set tested backend image@sha256 digest}
+    profiles: [ops]
+    restart: "no"
+    command: [python, /app/ops/storage_init.py]
+    environment:
+      <<: *backend-env
+      MINIO_ACCESS_KEY: ${MINIO_INIT_ACCESS_KEY:?Set bucket administrator key}
+      MINIO_SECRET_KEY: ${MINIO_INIT_SECRET_KEY:?Set bucket administrator secret}
+    depends_on: [minio]
 
   backend:
-    build: ./backend
-    restart: unless-stopped
-    environment:
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: ${DB_NAME:-attendance}
-      DB_USER: ${DB_USER:-attendance}
-      DB_PASSWORD: ${DB_PASSWORD:-attendance}
-      MINIO_ENDPOINT: minio:9000
-      # Адрес MinIO для браузера: на нём подписываются presigned-ссылки
-      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-localhost:9000}
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-      MINIO_BUCKET: ${MINIO_BUCKET:-attendance-clips}
-      TIMEZONE: ${TIMEZONE:-Europe/Moscow}
-      SEMESTER_START: ${SEMESTER_START:-2026-02-09}
-      RECOGNITION_UPLOAD_MAX_SIZE_MB: ${RECOGNITION_UPLOAD_MAX_SIZE_MB:-512}
-      RECOGNITION_MODEL_NAME: ${RECOGNITION_MODEL_NAME:-yolov8n}
-      RECOGNITION_MODEL_VERSION: ${RECOGNITION_MODEL_VERSION:-8}
-      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+    <<: *runtime
+    image: ${BACKEND_IMAGE:?Set tested backend image@sha256 digest}
+    environment: *backend-env
+    command: [uvicorn, app.main:app, --host, 0.0.0.0, --port, '8000', --no-proxy-headers]
     depends_on:
-      db:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
-    ports:
-      - "8000:8000"
+      db: {condition: service_healthy}
     healthcheck:
-      test: ["CMD", "curl", "-sf", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=2)"]
+      interval: 15s
+      timeout: 3s
+      retries: 3
 
-  capture-manager:
-    build: ./capture
-    restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://${DB_USER:-attendance}:${DB_PASSWORD:-attendance}@db:5432/${DB_NAME:-attendance}
-      CAPTURE_GROUP: ${CAPTURE_GROUP:-default}
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-      MINIO_BUCKET: ${MINIO_BUCKET:-attendance-clips}
+  scheduler:
+    <<: *runtime
+    image: ${BACKEND_IMAGE:?Set tested backend image@sha256 digest}
+    environment: *backend-env
+    command: [python, -m, app.scheduler]
     depends_on:
-      backend:
-        condition: service_healthy
+      db: {condition: service_healthy}
+
+  maintenance:
+    <<: *runtime
+    image: ${BACKEND_IMAGE:?Set tested backend image@sha256 digest}
+    environment: *backend-env
+    command: [python, -m, app.maintenance]
+    depends_on:
+      db: {condition: service_healthy}
 
   recognition-worker:
-    build:
-      context: ./recognition
-      args:
-        MODEL_PATH: ${MODEL_PATH:-yolov8n.pt}
-        DOWNLOAD_MODEL: ${DOWNLOAD_MODEL:-true}
-    restart: unless-stopped
+    <<: *runtime
+    image: ${RECOGNITION_IMAGE:?Set tested CPU worker image@sha256 digest}
+    cpus: 2.0
+    mem_limit: 3g
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=512m,mode=1777']
     environment:
-      DATABASE_URL: postgresql://${DB_USER:-attendance}:${DB_PASSWORD:-attendance}@db:5432/${DB_NAME:-attendance}
+      DATABASE_URL: ${RECOGNITION_DATABASE_URL:?Set recognition DSN}
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin}
-      MINIO_BUCKET: ${MINIO_BUCKET:-attendance-clips}
-      MODEL_PATH: ${MODEL_PATH:-yolov8n.pt}
-      INFERENCE_IMAGE_SIZE: ${INFERENCE_IMAGE_SIZE:-960}
-      INFERENCE_IOU_THRESHOLD: ${INFERENCE_IOU_THRESHOLD:-0.5}
-      INFERENCE_MAX_DETECTIONS: ${INFERENCE_MAX_DETECTIONS:-300}
-      MAX_SAMPLED_FRAMES: ${MAX_SAMPLED_FRAMES:-180}
-      EVALUATION_TOLERANCE_PEOPLE: ${EVALUATION_TOLERANCE_PEOPLE:-1}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Set scoped storage key}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Set scoped storage secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:?Set isolated bucket}
+      MODEL_PATH: /models/model.pt
+      MODEL_SHA256: ${MODEL_SHA256:?Set reviewed model sha256}
+      CUDA_VISIBLE_DEVICES: ""
+      OMP_NUM_THREADS: "1"
+      INFERENCE_THREADS: "1"
+      INFERENCE_IMAGE_SIZE: "960"
+      MAX_SAMPLED_FRAMES: "180"
+      MEMORY_LIMIT_MB: "2304"
+      MAX_FILE_SIZE_MB: "100"
+      MAX_VIDEO_DURATION_SECONDS: "120"
+      MAX_IMAGE_PIXELS: "16000000"
+    volumes:
+      - type: bind
+        source: ${MODEL_FILE:?Set absolute verified model path}
+        target: /models/model.pt
+        read_only: true
+        bind: {create_host_path: false}
     depends_on:
-      backend:
-        condition: service_healthy
-    # Масштабирование: docker compose up -d --scale recognition-worker=3
+      db: {condition: service_healthy}
+
+  capture-manager:
+    <<: *runtime
+    image: ${CAPTURE_IMAGE:?Set tested capture image@sha256 digest}
+    profiles: [camera]
+    networks: [private, cameras]
+    environment:
+      DATABASE_URL: ${CAPTURE_DATABASE_URL:?Set capture DSN}
+      CAPTURE_GROUP: ${CAPTURE_GROUP:-default}
+      CAMERA_ENCRYPTION_KEY: ${CAMERA_ENCRYPTION_KEY:?Set Fernet key}
+      CAMERA_ALLOWED_CIDRS: ${CAMERA_ALLOWED_CIDRS:-}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?Set scoped storage key}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:?Set scoped storage secret}
+      MINIO_BUCKET: ${MINIO_BUCKET:?Set isolated bucket}
+    depends_on:
+      db: {condition: service_healthy}
 
   frontend:
-    build: ./frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "3000:80"
+    <<: *runtime
+    image: ${FRONTEND_IMAGE:?Set tested production frontend image@sha256 digest}
+    environment: {NGINX_ENTRYPOINT_QUIET_LOGS: '1'}
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m,mode=1777']
+    depends_on: [backend]
 
+  gateway:
+    <<: *runtime
+    image: ${GATEWAY_IMAGE:?Set reviewed nginx-unprivileged image@sha256 digest}
+    user: "101:101"
+    networks: [private, ingress]
+    ports: ['${HTTPS_BIND:-127.0.0.1}:${HTTPS_PORT:-8443}:8443']
+    environment:
+      APP_HOST: ${APP_HOST:?Set application hostname}
+      MEDIA_HOST: ${MEDIA_HOST:?Set media hostname}
+      HTTPS_PORT: ${HTTPS_PORT:-8443}
+      NGINX_ENVSUBST_FILTER: '^(APP_HOST|MEDIA_HOST|HTTPS_PORT)$$'
+    configs:
+      - source: gateway
+        target: /etc/nginx/templates/default.conf.template
+    secrets: [tls_crt, tls_key]
+    tmpfs: ['/tmp:rw,noexec,nosuid,size=64m,mode=1777', '/etc/nginx/conf.d:rw,noexec,nosuid,size=1m,uid=101,gid=101']
+    depends_on: [frontend, minio]
+
+networks:
+  private: {internal: true}
+  ingress: {}
+  cameras: {}
 volumes:
-  pgdata:
-  miniodata:
+  pgdata: {}
+  miniodata: {}
+configs:
+  gateway: {file: ./scripts/ops/gateway.conf.template}
+secrets:
+  tls_crt: {file: '${TLS_CERT_FILE:?Set full-chain certificate path}'}
+  tls_key: {file: '${TLS_KEY_FILE:?Set TLS private-key path}'}

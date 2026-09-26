@@ -31,21 +31,29 @@ def _round(value, digits: int = 4):
 
 
 _COMPLETE = func.count(
-    case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.complete, 1))
+    case(
+        (AttendanceRecord.calculation_status == AttendanceCalculationStatus.complete, 1)
+    )
 )
 _PARTIAL = func.count(
-    case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.partial, 1))
+    case(
+        (AttendanceRecord.calculation_status == AttendanceCalculationStatus.partial, 1)
+    )
 )
 _FAILED = func.count(
     case((AttendanceRecord.calculation_status == AttendanceCalculationStatus.failed, 1))
 )
+_VALID_RATE = (
+    AttendanceRecord.expected_count > 0
+) & AttendanceRecord.detected_average.is_not(None)
+_WEIGHTED_RATE = func.sum(
+    case((_VALID_RATE, AttendanceRecord.detected_average))
+) / func.nullif(func.sum(case((_VALID_RATE, AttendanceRecord.expected_count))), 0)
 
 
 def summary(db: DbSession) -> SummaryStats:
     today = current_local_date()
-    complete, partial, failed = db.execute(
-        select(_COMPLETE, _PARTIAL, _FAILED)
-    ).one()
+    complete, partial, failed = db.execute(select(_COMPLETE, _PARTIAL, _FAILED)).one()
     return SummaryStats(
         groups=db.scalar(select(func.count(Group.id))) or 0,
         teachers=db.scalar(select(func.count(Teacher.id))) or 0,
@@ -58,12 +66,12 @@ def summary(db: DbSession) -> SummaryStats:
         )
         or 0,
         sessions_finished=db.scalar(
-            select(func.count(Session.id)).where(Session.status == SessionStatus.finished)
+            select(func.count(Session.id)).where(
+                Session.status == SessionStatus.finished
+            )
         )
         or 0,
-        avg_attendance_rate=_round(
-            db.scalar(select(func.avg(AttendanceRecord.attendance_rate)))
-        ),
+        avg_attendance_rate=_round(db.scalar(select(_WEIGHTED_RATE))),
         records_complete=complete or 0,
         records_partial=partial or 0,
         records_failed=failed or 0,
@@ -86,7 +94,7 @@ def _entity_stats(
     base = (
         select(
             func.count(AttendanceRecord.id),
-            func.avg(AttendanceRecord.attendance_rate),
+            _WEIGHTED_RATE,
             func.avg(AttendanceRecord.detected_average),
             _COMPLETE,
             _PARTIAL,
@@ -104,7 +112,7 @@ def _entity_stats(
             breakdown_entity.id,
             breakdown_name,
             func.count(AttendanceRecord.id),
-            func.avg(AttendanceRecord.attendance_rate),
+            _WEIGHTED_RATE,
             func.avg(AttendanceRecord.detected_average),
         )
         .join(Schedule, breakdown_join_column == breakdown_entity.id)
@@ -157,7 +165,13 @@ def discipline_stats(db: DbSession, discipline_id: int) -> EntityStats:
 
 def group_stats(db: DbSession, group_id: int) -> EntityStats:
     return _entity_stats(
-        db, Group, group_id, Schedule.group_id, Discipline, Schedule.discipline_id, "name"
+        db,
+        Group,
+        group_id,
+        Schedule.group_id,
+        Discipline,
+        Schedule.discipline_id,
+        "name",
     )
 
 
@@ -171,7 +185,8 @@ def group_timeline(
     query = (
         select(
             Session.date,
-            func.avg(AttendanceRecord.attendance_rate),
+            _WEIGHTED_RATE,
+            func.max(AttendanceRecord.expected_count),
             func.avg(AttendanceRecord.detected_average),
         )
         .join(AttendanceRecord, AttendanceRecord.session_id == Session.id)
@@ -189,8 +204,8 @@ def group_timeline(
         TimelinePoint(
             date=row[0],
             avg_rate=_round(row[1]),
-            avg_detected=_round(row[2], 2),
-            expected=group.students_count,
+            avg_detected=_round(row[3], 2),
+            expected=row[2] or 0,
         )
         for row in db.execute(query).all()
     ]

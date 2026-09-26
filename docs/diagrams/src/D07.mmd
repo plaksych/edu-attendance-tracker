@@ -1,0 +1,28 @@
+sequenceDiagram
+  participant S as Scheduler
+  participant D as PostgreSQL
+  participant C as Capture (опционально)
+  participant R as Recognition
+  participant A as Backend API
+  S->>D: Календарь и границы семестра, session + snapshots
+  S->>D: Создать after_start + before_end
+  alt Есть активные камеры
+    S->>D: Создать capture + snapshots role / priority / zone
+    C->>D: Claim, запись, завершение + recognition job
+    R->>D: Завершение job + result
+    S->>D: Агрегация завершённых камер
+    Note over S,D: single / maximum / sum / primary_backup<br/>Неполный замер отмечается отдельно
+  else Upload-источник без capture
+    A->>D: Upload с session_id и measurement_id
+    Note over A,D: Один upload на measurement без capture<br/>session_id без measurement не влияет на итог
+    R->>D: Завершение upload job + result
+    S->>D: Для открытого замера взять upload.job.result
+  else Нет capture и upload
+    S->>D: После finished + grace (default 3600 s), failed / missing_input
+    Note over S,D: final_people_count = NULL, не ноль
+  end
+  S->>D: При наличии результатов сохранить их ID и used_for_count
+  S->>D: Для finished, attendance из доступных замеров
+  Note over S,D: Два известных значения = complete, одно = partial<br/>Нет известных значений = failed
+  Note over S,D: Готовый attendance и терминальные замеры<br/>от retry не пересчитываются
+  A->>D: GET занятия / stats с правами пользователя

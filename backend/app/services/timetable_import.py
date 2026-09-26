@@ -129,11 +129,17 @@ def _group_columns(sheet: _Sheet, header_row: int) -> list[tuple[str, int, int]]
     ]
     for col, name in group_cols:
         room_col = next(
-            (c for c in range(col + 1, sheet.ws.max_column + 1) if "Аудито" in headers[c]),
+            (
+                c
+                for c in range(col + 1, sheet.ws.max_column + 1)
+                if "Аудито" in headers[c]
+            ),
             None,
         )
         if room_col is None:
-            logger.warning("Лист %s: у группы %s нет колонки аудитории", sheet.ws.title, name)
+            logger.warning(
+                "Лист %s: у группы %s нет колонки аудитории", sheet.ws.title, name
+            )
             continue
         result.append((name, col, room_col))
     return result
@@ -270,7 +276,9 @@ def parse_workbook(file: BinaryIO) -> tuple[list[ParsedLesson], list[str]]:
     return lessons, errors
 
 
-def _get_or_create(db: DbSession, cache: dict, model, filter_by: dict, defaults: dict | None = None):
+def _get_or_create(
+    db: DbSession, cache: dict, model, filter_by: dict, defaults: dict | None = None
+):
     key = (model, tuple(sorted(filter_by.items())))
     if key in cache:
         return cache[key]

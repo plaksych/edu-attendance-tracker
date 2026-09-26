@@ -78,7 +78,9 @@ class ScheduleRead(BaseModel):
 
 
 class ScheduleImportResult(BaseModel):
-    created: int = Field(description="Количество созданных записей расписания", examples=[42])
+    created: int = Field(
+        description="Количество созданных записей расписания", examples=[42]
+    )
     skipped: int = Field(description="Количество пропущенных дублей", examples=[3])
     errors: list[str] = Field(
         description="Ошибки по строкам или ячейкам, которые не удалось импортировать",

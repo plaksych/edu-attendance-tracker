@@ -1,0 +1,100 @@
+{
+  "status": "passed",
+  "scope": "synthetic empty-scene functional test; not classroom accuracy or production TLS/IAM",
+  "revision": "6db50e277044c62b565cf4c583f8fc0afe2d47c0",
+  "checks": [
+    {
+      "media_type": "image/png",
+      "upload_id": 1,
+      "job_id": 1,
+      "result": {
+        "people_count": 0,
+        "inference_metadata": {
+          "engine": "server",
+          "attempt": 1,
+          "runtime": "ultralytics",
+          "image_size": 960,
+          "model_name": "pipeline-model.pt",
+          "provenance": "server_inference",
+          "model_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+          "iou_threshold": 0.5,
+          "max_detections": 300,
+          "person_class_id": 0,
+          "runtime_version": "8.3.132",
+          "sample_rate_fps": 1.0,
+          "max_sampled_frames": 3,
+          "confidence_threshold": 0.35
+        },
+        "detected_median": 0.0,
+        "detected_percentile_75": 0.0,
+        "detected_max": 0,
+        "average_confidence": null,
+        "count_stddev": 0.0,
+        "sampled_frames": 1,
+        "source_frames": 1,
+        "source_duration_ms": 0,
+        "representative_frame_ms": 0,
+        "absolute_error": 0,
+        "relative_error": null,
+        "within_tolerance": true,
+        "media_expires_at": "2026-12-24T12:43:33.572504Z"
+      }
+    },
+    {
+      "media_type": "video/mp4",
+      "upload_id": 2,
+      "job_id": 2,
+      "result": {
+        "people_count": 0,
+        "inference_metadata": {
+          "engine": "server",
+          "attempt": 1,
+          "runtime": "ultralytics",
+          "image_size": 960,
+          "model_name": "pipeline-model.pt",
+          "provenance": "server_inference",
+          "model_sha256": "f59b3d833e2ff32e194b5bb8e08d211dc7c5bdf144b90d2c8412c47ccfc83b36",
+          "iou_threshold": 0.5,
+          "max_detections": 300,
+          "person_class_id": 0,
+          "runtime_version": "8.3.132",
+          "sample_rate_fps": 1.0,
+          "max_sampled_frames": 3,
+          "confidence_threshold": 0.35
+        },
+        "detected_median": 0.0,
+        "detected_percentile_75": 0.0,
+        "detected_max": 0,
+        "average_confidence": null,
+        "count_stddev": 0.0,
+        "sampled_frames": 1,
+        "source_frames": 2,
+        "source_duration_ms": 1000,
+        "representative_frame_ms": 0,
+        "absolute_error": 0,
+        "relative_error": null,
+        "within_tolerance": true,
+        "media_expires_at": "2026-12-24T12:43:39.904060Z"
+      }
+    },
+    "Retry creates a new result; replay creates no third attempt; finalized measurement sources and CSV remain unchanged",
+    "HTTP upload, replay, real image/video inference, signed media, private S3, aggregation and CSV passed",
+    "Restored API returns identical CSV, source bytes and annotated bytes in a separate namespace"
+  ],
+  "recovery": {
+    "backup": {
+      "snapshot": "e7e1de605811cebe1b63e0b9e3b871bc96e226efc922fc025c368f3b0144300f",
+      "point": "2026-09-25T12:43:49.013696+00:00",
+      "status": "backup_created",
+      "restore_verified": false
+    },
+    "restore": {
+      "status": "data_restore_verified",
+      "snapshot": "e7e1de605811cebe1b63e0b9e3b871bc96e226efc922fc025c368f3b0144300f",
+      "point": "2026-09-25T12:43:49.013696+00:00",
+      "application_smoke": "not_run",
+      "namespace": "attendance-restore-fc4a12c2e01f"
+    },
+    "repository_bucket": "attendance-demo-fc4a12c2e01f-backup"
+  }
+}

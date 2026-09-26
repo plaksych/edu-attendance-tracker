@@ -1,0 +1,33 @@
+sequenceDiagram
+  autonumber
+  participant U as Frontend
+  participant A as Backend API
+  participant D as PostgreSQL
+  participant S as S3 / MinIO
+  participant W as Recognition
+  U->>A: multipart + cookie + CSRF + Idempotency-Key
+  A->>A: Права, формат, decode/probe, лимиты, SHA256
+  A->>D: Reserve ключа owner+route+key
+  alt Нарушение границы / конфликт
+    A-->>U: 401 / 403 / 413 / 422 / 409
+  else Новый допустимый запрос
+    A->>S: PUT original/uploads/UUID.ext
+    A->>D: Транзакция upload + pending job + resource_id
+    A-->>U: 202, это не результат inference
+  end
+  W->>D: SKIP LOCKED, attempts++, новый claim_token
+  W->>S: GET исходного файла
+  loop Пока lease принадлежит попытке
+    W->>D: Heartbeat с token и проверкой срока
+  end
+  W->>W: Проверенные веса, ограниченный процесс inference
+  alt Ошибка / timeout
+    W->>D: CAS retry_wait либо failed
+  else Результат получен
+    W->>S: PUT annotated/jobs/ID/attempts/N/token.jpg
+    W->>D: CAS completed + INSERT result в одной транзакции
+    Note over W,D: Старый token не публикует результат, объект остаётся для GC
+  end
+  U->>A: GET uploads/ID и media
+  A->>D: Повторная проверка области доступа
+  A-->>U: Статус, метрики и временные ссылки

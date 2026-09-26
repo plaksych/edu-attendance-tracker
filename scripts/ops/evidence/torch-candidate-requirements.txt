@@ -1,0 +1,3 @@
+# Advisory feasibility check only; not a runtime approval.
+torch==2.13.0
+torchvision==0.28.0

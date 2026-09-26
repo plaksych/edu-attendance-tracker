@@ -12,11 +12,14 @@ import os
 import signal
 import tempfile
 import threading
+import random
+import time
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime, timezone
 from pathlib import Path
 
 from app.config import Settings, get_settings
+from app.camera_security import CameraPolicyError, camera_url
 from app.db import CaptureTask, Database
 from app.recorder import record_clip
 from app.storage import Storage, original_object_key
@@ -34,28 +37,54 @@ class CaptureLeaseLost(Exception):
 
 
 def _heartbeat_loop(
-    db: Database, settings: Settings, task: CaptureTask, stop: threading.Event
+    db: Database,
+    settings: Settings,
+    task: CaptureTask,
+    stop: threading.Event,
+    lost: threading.Event,
+    shutdown: threading.Event | None = None,
 ) -> None:
-    while not stop.wait(settings.heartbeat_interval_seconds):
+    next_heartbeat = time.monotonic() + settings.heartbeat_interval_seconds
+    while not stop.wait(0.2):
+        if shutdown is not None and shutdown.is_set():
+            lost.set()
+            return
+        if time.monotonic() < next_heartbeat:
+            continue
         try:
-            if not db.heartbeat(task.id, settings.worker_id, settings.lease_seconds):
+            if not db.heartbeat(
+                task.id, settings.worker_id, task.claim_token, settings.lease_seconds
+            ):
                 logger.warning("Потерян lease задания записи %s", task.id)
+                lost.set()
                 return
+            next_heartbeat = time.monotonic() + settings.heartbeat_interval_seconds
         except Exception:
-            logger.exception("Не удалось продлить lease задания записи %s", task.id)
+            lost.set()
+            return
 
 
-def process_task(db: Database, storage: Storage, settings: Settings, task: CaptureTask) -> None:
+def process_task(
+    db: Database,
+    storage: Storage,
+    settings: Settings,
+    task: CaptureTask,
+    shutdown: threading.Event | None = None,
+) -> None:
     """Полный цикл одного задания: запись, загрузка, фиксация результата."""
     tmp_path: str | None = None
     heartbeat_stop = threading.Event()
+    lost = threading.Event()
     heartbeat_thread: threading.Thread | None = None
     try:
-        if not db.mark_recording(task.id, settings.worker_id, settings.lease_seconds):
+        source_url = camera_url(task.rtsp_url, settings)
+        if not db.mark_recording(
+            task.id, settings.worker_id, task.claim_token, settings.lease_seconds
+        ):
             raise CaptureLeaseLost()
         heartbeat_thread = threading.Thread(
             target=_heartbeat_loop,
-            args=(db, settings, task, heartbeat_stop),
+            args=(db, settings, task, heartbeat_stop, lost, shutdown),
             name=f"capture-heartbeat-{task.id}",
             daemon=True,
         )
@@ -63,25 +92,31 @@ def process_task(db: Database, storage: Storage, settings: Settings, task: Captu
         fd, tmp_path = tempfile.mkstemp(prefix=f"capture-{task.id}-", suffix=".mp4")
         os.close(fd)
         record_clip(
-            task.rtsp_url,
+            source_url,
             task.duration_seconds,
             tmp_path,
             settings.ffmpeg_extra_timeout_seconds,
+            cancelled=lost,
         )
-        if not db.mark_uploading(task.id, settings.worker_id):
+        if lost.is_set() or not db.mark_uploading(
+            task.id, settings.worker_id, task.claim_token
+        ):
             raise CaptureLeaseLost()
-        object_key = original_object_key(task.session_id, task.measurement_id, task.camera_id)
+        object_key = original_object_key(task.id, task.attempts, task.claim_token)
         size_bytes = storage.upload_video(tmp_path, object_key)
         if not db.mark_completed(
             task.id,
             settings.worker_id,
+            task.claim_token,
             storage.bucket,
             object_key,
             size_bytes,
             task.duration_seconds * 1000,
         ):
             raise CaptureLeaseLost()
-        logger.info("Задание %s выполнено: %s (%s байт)", task.id, object_key, size_bytes)
+        logger.info(
+            "Задание %s выполнено: %s (%s байт)", task.id, object_key, size_bytes
+        )
     except CaptureLeaseLost:
         logger.warning("Задание записи %s больше не принадлежит этому воркеру", task.id)
     except Exception as exc:  # noqa: BLE001 — любая ошибка фиксируется в задании
@@ -94,24 +129,45 @@ def process_task(db: Database, storage: Storage, settings: Settings, task: Captu
             Path(tmp_path).unlink(missing_ok=True)
 
 
-def _register_failure(db: Database, settings: Settings, task: CaptureTask, exc: Exception) -> None:
+def _register_failure(
+    db: Database, settings: Settings, task: CaptureTask, exc: Exception
+) -> None:
     """Переводит задание в retry_wait или failed в зависимости от числа попыток."""
-    error_text = str(exc) or exc.__class__.__name__
+    error_text = exc.__class__.__name__
     try:
-        if task.attempts >= settings.max_attempts:
-            updated = db.mark_failed(task.id, settings.worker_id, error_text)
+        if task.attempts >= settings.max_attempts or isinstance(
+            exc, (CameraPolicyError, ValueError)
+        ):
+            updated = db.mark_failed(
+                task.id, settings.worker_id, task.claim_token, error_text
+            )
             if not updated:
-                logger.warning("Задание записи %s больше не принадлежит этому воркеру", task.id)
+                logger.warning(
+                    "Задание записи %s больше не принадлежит этому воркеру", task.id
+                )
                 return
             logger.error(
-                "Задание %s провалено после %s попыток: %s", task.id, task.attempts, error_text
+                "Задание %s провалено после %s попыток: %s",
+                task.id,
+                task.attempts,
+                error_text,
             )
         else:
             updated = db.mark_retry(
-                task.id, settings.worker_id, error_text, settings.retry_delay_seconds
+                task.id,
+                settings.worker_id,
+                task.claim_token,
+                error_text,
+                random.uniform(0.5, 1)
+                * min(
+                    settings.retry_max_delay_seconds,
+                    settings.retry_delay_seconds * 2 ** min(task.attempts - 1, 16),
+                ),
             )
             if not updated:
-                logger.warning("Задание записи %s больше не принадлежит этому воркеру", task.id)
+                logger.warning(
+                    "Задание записи %s больше не принадлежит этому воркеру", task.id
+                )
                 return
             logger.warning(
                 "Задание %s отложено на повтор (попытка %s): %s",
@@ -140,7 +196,7 @@ def run_batch(
     while pending:
         if stop_event.is_set():
             released = db.release_claims(
-                [task.id for task in pending],
+                [(task.id, task.claim_token) for task in pending],
                 settings.worker_id,
             )
             logger.info("Возвращено в очередь не начатых заданий: %s", released)
@@ -152,9 +208,12 @@ def run_batch(
             wait_seconds = max((pending[0].planned_at - now).total_seconds(), 0.0)
             stop_event.wait(wait_seconds)
             continue
-        pending = pending[len(due):]
+        pending = pending[len(due) :]
         logger.info("Старт записи: %s заданий", len(due))
-        futures = [executor.submit(process_task, db, storage, settings, task) for task in due]
+        futures = [
+            executor.submit(process_task, db, storage, settings, task, stop_event)
+            for task in due
+        ]
         wait(futures)
 
 
@@ -164,7 +223,8 @@ def main() -> None:
 
     def handle_signal(signum: int, _frame: object) -> None:
         logger.info(
-            "Получен сигнал %s, завершение после текущих заданий", signal.Signals(signum).name
+            "Получен сигнал %s, завершение после текущих заданий",
+            signal.Signals(signum).name,
         )
         stop_event.set()
 
@@ -190,6 +250,7 @@ def main() -> None:
                     lookahead_seconds=settings.claim_lookahead_seconds,
                     lease_seconds=settings.lease_seconds,
                     batch_size=settings.claim_batch_size,
+                    max_attempts=settings.max_attempts,
                 )
             except Exception:
                 logger.exception("Не удалось захватить задания, пауза перед повтором")

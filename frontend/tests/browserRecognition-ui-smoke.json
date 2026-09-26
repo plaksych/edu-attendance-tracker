@@ -1,0 +1,1102 @@
+{
+  "status": "passed",
+  "startedAt": "2026-09-23T19:51:31.080Z",
+  "base": "/edu-attendance-tracker/",
+  "scope": "Actual compiled static application and LocalRecognitionDialog; generated blank PNG and 6-second white MP4; real ONNX/WASM",
+  "limitation": "Execution/privacy/UI smoke on synthetic negative media, not classroom accuracy or cross-browser/device certification.",
+  "environment": {
+    "node": "v26.4.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1",
+    "browser": "154.0.8037.57"
+  },
+  "baseCommit": "6ec73193296b68edfac270908b759b91b1bde5a2",
+  "sourceHashes": {
+    "src/components/LocalRecognitionDialog.tsx": "c96c2a383e78bb99ade25ea9281630a1969ca40a6839772878b8f85c336aa85e",
+    "src/components/Modal.tsx": "c7a361e0843d18cb303e53450664d8acec5cef08b36f3b5eb9ab5332f95a21f4",
+    "src/pages/RecognitionPage.tsx": "4ea4914472e668b9688657d0979f7b8c4134e4e7ae2bb67030b887e2bb675be8",
+    "src/lib/browserRecognition.ts": "2b4a6d35659ba0628173627d4f98dcc3c37b958211e090fed6f8e5fa403c864b",
+    "src/lib/browserRecognitionCore.ts": "d899a49c39d702775d95e1cf342bb940a293f08244a693a4a8f207c831f0eb93",
+    "src/lib/browserRecognitionClient.ts": "f3ad83f2c1de29fab65cb0cd455673ed155869e164a8816c08b68f86da0644db",
+    "src/workers/browserRecognition.bootstrap.js": "a1782cfb39189b2c9ba27384b30ddd69f6e516a52af779ee111025fa2d64a16c",
+    "src/workers/browserRecognition.worker.ts": "b35366350524023ff35efed8d58a52bc41438affbb00c3a443bd035d9b81d4b3",
+    "tests/browserRecognitionUiSmoke.mjs": "89dae0c32b61fc76e3dd29cfc0c1eb88521e63dde3a94bed9e49ccbc0fb2818e"
+  },
+  "stages": {
+    "openDialog": {
+      "passed": true,
+      "runtimeRequests": 0,
+      "workers": 0,
+      "url": "/edu-attendance-tracker/#/recognition"
+    },
+    "selectImage": {
+      "passed": true,
+      "runtimeRequests": 0,
+      "workers": 0
+    },
+    "errorRetryUi": {
+      "passed": true,
+      "displayedError": "Не удалось загрузить модель (HTTP 503)"
+    },
+    "cancelInitializationUi": {
+      "passed": true,
+      "stopWallMs": 66.12433400000009,
+      "workerClosed": true
+    },
+    "realImage": {
+      "passed": true,
+      "uiWallMs": 2887.930500000002,
+      "report": {
+        "boxes": [],
+        "averageConfidence": null,
+        "elapsedMs": 1175.7000000476837,
+        "provenance": "browser_inference",
+        "model": "yolov8n-coco-browser",
+        "modelSha256": "353ca4ab4fa9d4e5499d3300912faa30dae49718f90be8a159ff6af09a4e66b7",
+        "runtime": "onnxruntime-web 1.22.0 / wasm",
+        "confidenceThreshold": 0.35,
+        "nmsIouThreshold": 0.45,
+        "processedAt": "2026-09-23T19:51:45.356Z",
+        "sourceWidth": 320,
+        "sourceHeight": 240,
+        "count": 0,
+        "frameTimeSeconds": null,
+        "recentFrameCounts": [
+          0
+        ],
+        "samplingDelayAfterInferenceMs": 900,
+        "quality": {
+          "confidenceIsAccuracy": false,
+          "classroomAccuracy": "not_evaluated"
+        }
+      }
+    },
+    "selectVideo": {
+      "passed": true,
+      "metadata": {
+        "duration": 6,
+        "width": 320,
+        "height": 240,
+        "readyState": 4,
+        "paused": true
+      }
+    },
+    "realVideoFrame": {
+      "passed": true,
+      "uiWallMs": 3370.5262920000023,
+      "report": {
+        "boxes": [],
+        "averageConfidence": null,
+        "elapsedMs": 1039.5999999046326,
+        "provenance": "browser_inference",
+        "model": "yolov8n-coco-browser",
+        "modelSha256": "353ca4ab4fa9d4e5499d3300912faa30dae49718f90be8a159ff6af09a4e66b7",
+        "runtime": "onnxruntime-web 1.22.0 / wasm",
+        "confidenceThreshold": 0.35,
+        "nmsIouThreshold": 0.45,
+        "processedAt": "2026-09-23T19:51:51.208Z",
+        "sourceWidth": 320,
+        "sourceHeight": 240,
+        "count": 0,
+        "frameTimeSeconds": 0,
+        "recentFrameCounts": [
+          0
+        ],
+        "samplingDelayAfterInferenceMs": 900,
+        "quality": {
+          "confidenceIsAccuracy": false,
+          "classroomAccuracy": "not_evaluated"
+        }
+      }
+    },
+    "videoSampling": {
+      "passed": true,
+      "report": {
+        "boxes": [],
+        "averageConfidence": null,
+        "elapsedMs": 1119.4000000953674,
+        "provenance": "browser_inference",
+        "model": "yolov8n-coco-browser",
+        "modelSha256": "353ca4ab4fa9d4e5499d3300912faa30dae49718f90be8a159ff6af09a4e66b7",
+        "runtime": "onnxruntime-web 1.22.0 / wasm",
+        "confidenceThreshold": 0.35,
+        "nmsIouThreshold": 0.45,
+        "processedAt": "2026-09-23T19:51:56.376Z",
+        "sourceWidth": 320,
+        "sourceHeight": 240,
+        "count": 0,
+        "frameTimeSeconds": 0.018398,
+        "recentFrameCounts": [
+          0,
+          0
+        ],
+        "samplingDelayAfterInferenceMs": 900,
+        "quality": {
+          "confidenceIsAccuracy": false,
+          "classroomAccuracy": "not_evaluated"
+        }
+      },
+      "pausedAfterStop": true,
+      "workerClosed": true
+    },
+    "cleanupUi": {
+      "passed": true,
+      "activeUrlsAfterClear": 0,
+      "reopenedEmpty": true
+    }
+  },
+  "network": {
+    "requests": [
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "document"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/index-D1v2uLVK.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/index-6hjWsSXy.css",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "stylesheet"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/RecognitionPage-BCfR4vQ3.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/Modal-BlDTyb1q.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/management-DnsXz4fJ.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/StatCard-BlF7Xslm.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/Provenance-DQIUf4ci.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/golos-text-cyrillic-wght-normal-mKek_fSS.woff2",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "font"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/golos-text-latin-wght-normal-BS5oQT7X.woff2",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "font"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/favicon.svg",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "other"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/onest-cyrillic-wght-normal-DayYxulF.woff2",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "font"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/onest-latin-wght-normal-Dun_Rd-l.woff2",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "font"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/staticClient-CwEk3cHR.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/synthetic-classroom.png",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "image"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/LocalRecognitionDialog-BENks6xQ.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "intentional-model-failure",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "intentional-model-failure",
+        "path": "/edu-attendance-tracker/ort/ort.min.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "other"
+      },
+      {
+        "stage": "intentional-model-failure",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "intentional-model-failure",
+        "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "fetch"
+      },
+      {
+        "stage": "cancel-model-initialization",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "cancel-model-initialization",
+        "path": "/edu-attendance-tracker/ort/ort.min.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "other"
+      },
+      {
+        "stage": "cancel-model-initialization",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "cancel-model-initialization",
+        "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "fetch"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/ort/ort.min.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "other"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "fetch"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.mjs",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "fetch"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/ort/ort.min.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "other"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "fetch"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.mjs",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "script"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+        "origin": "http://127.0.0.1:61826",
+        "query": "",
+        "method": "GET",
+        "bodyBytes": 0,
+        "resourceType": "fetch"
+      }
+    ],
+    "responses": [
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/",
+        "status": 200,
+        "contentType": "text/html",
+        "contentLength": "558"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/index-6hjWsSXy.css",
+        "status": 200,
+        "contentType": "text/css",
+        "contentLength": "38295"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/index-D1v2uLVK.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "213355"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/RecognitionPage-BCfR4vQ3.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "10142"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/Modal-BlDTyb1q.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "1546"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/Provenance-DQIUf4ci.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "426"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/management-DnsXz4fJ.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "912"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/StatCard-BlF7Xslm.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "503"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/golos-text-latin-wght-normal-BS5oQT7X.woff2",
+        "status": 200,
+        "contentType": "font/woff2",
+        "contentLength": "37916"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/golos-text-cyrillic-wght-normal-mKek_fSS.woff2",
+        "status": 200,
+        "contentType": "font/woff2",
+        "contentLength": "22032"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/favicon.svg",
+        "status": 200,
+        "contentType": "image/svg+xml",
+        "contentLength": "474"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/onest-cyrillic-wght-normal-DayYxulF.woff2",
+        "status": 200,
+        "contentType": "font/woff2",
+        "contentLength": "15860"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/onest-latin-wght-normal-Dun_Rd-l.woff2",
+        "status": 200,
+        "contentType": "font/woff2",
+        "contentLength": "33760"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/staticClient-CwEk3cHR.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "7600"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/synthetic-classroom.png",
+        "status": 200,
+        "contentType": "image/png",
+        "contentLength": "20919"
+      },
+      {
+        "stage": "navigation",
+        "path": "/edu-attendance-tracker/assets/LocalRecognitionDialog-BENks6xQ.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "15004"
+      },
+      {
+        "stage": "intentional-model-failure",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "583"
+      },
+      {
+        "stage": "intentional-model-failure",
+        "path": "/edu-attendance-tracker/ort/ort.min.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "357641"
+      },
+      {
+        "stage": "intentional-model-failure",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "5394"
+      },
+      {
+        "stage": "intentional-model-failure",
+        "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+        "status": 503,
+        "contentType": "text/plain"
+      },
+      {
+        "stage": "cancel-model-initialization",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "583"
+      },
+      {
+        "stage": "cancel-model-initialization",
+        "path": "/edu-attendance-tracker/ort/ort.min.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "357641"
+      },
+      {
+        "stage": "cancel-model-initialization",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "5394"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "583"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/ort/ort.min.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "357641"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "5394"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+        "status": 200,
+        "contentType": "application/octet-stream",
+        "contentLength": "12756454"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.mjs",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "44677"
+      },
+      {
+        "stage": "real-image-retry",
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+        "status": 200,
+        "contentType": "application/wasm",
+        "contentLength": "21872216"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "583"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/ort/ort.min.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "357641"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/assets/browserRecognition.worker-EptcNQ0l.js",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "5394"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/models/yolov8n.onnx",
+        "status": 200,
+        "contentType": "application/octet-stream",
+        "contentLength": "12756454"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.mjs",
+        "status": 200,
+        "contentType": "text/javascript",
+        "contentLength": "44677"
+      },
+      {
+        "stage": "real-video-frame",
+        "path": "/edu-attendance-tracker/ort/ort-wasm-simd-threaded.jsep.wasm",
+        "status": 200,
+        "contentType": "application/wasm",
+        "contentLength": "21872216"
+      }
+    ],
+    "rejected": [],
+    "localBlobRequests": [],
+    "summary": {
+      "passed": true,
+      "uploadBytes": 0,
+      "unexpectedRequests": 0,
+      "staticGets": 36,
+      "note": "PNG/MP4 selected by file input; media/exports are local blob URLs, never served or uploaded. All observed HTTP requests were exact-allowlist same-origin static GETs."
+    }
+  },
+  "pageErrors": [],
+  "console": [],
+  "screenshots": [
+    {
+      "file": "frontend/tests/browserRecognition-ui-desktop-image.png",
+      "controlsFile": "frontend/tests/browserRecognition-ui-desktop-image-controls.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "pageWidth": 1440,
+      "modal": {
+        "x": 180,
+        "y": 16,
+        "width": 1080,
+        "height": 968
+      },
+      "frame": {
+        "x": 333.328125,
+        "y": 296.5,
+        "width": 773.328125,
+        "height": 580.484375
+      },
+      "media": {
+        "x": 334.328125,
+        "y": 297.5,
+        "width": 771.328125,
+        "height": 578.484375
+      },
+      "horizontalOverflow": false
+    },
+    {
+      "file": "frontend/tests/browserRecognition-ui-mobile-image.png",
+      "controlsFile": "frontend/tests/browserRecognition-ui-mobile-image-controls.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageWidth": 390,
+      "modal": {
+        "x": 12,
+        "y": 20,
+        "width": 366,
+        "height": 812
+      },
+      "frame": {
+        "x": 32,
+        "y": 405,
+        "width": 326,
+        "height": 245
+      },
+      "media": {
+        "x": 33,
+        "y": 406,
+        "width": 324,
+        "height": 243
+      },
+      "horizontalOverflow": false
+    },
+    {
+      "file": "frontend/tests/browserRecognition-ui-mobile-video.png",
+      "controlsFile": "frontend/tests/browserRecognition-ui-mobile-video-controls.png",
+      "viewport": {
+        "width": 390,
+        "height": 844
+      },
+      "pageWidth": 390,
+      "modal": {
+        "x": 12,
+        "y": 20,
+        "width": 366,
+        "height": 812
+      },
+      "frame": {
+        "x": 32,
+        "y": 402,
+        "width": 326,
+        "height": 245
+      },
+      "media": {
+        "x": 33,
+        "y": 403,
+        "width": 324,
+        "height": 243
+      },
+      "horizontalOverflow": false
+    },
+    {
+      "file": "frontend/tests/browserRecognition-ui-desktop-video.png",
+      "controlsFile": "frontend/tests/browserRecognition-ui-desktop-video-controls.png",
+      "viewport": {
+        "width": 1440,
+        "height": 1000
+      },
+      "pageWidth": 1440,
+      "modal": {
+        "x": 180,
+        "y": 16,
+        "width": 1080,
+        "height": 968
+      },
+      "frame": {
+        "x": 333.328125,
+        "y": 296.5,
+        "width": 773.328125,
+        "height": 580.484375
+      },
+      "media": {
+        "x": 334.328125,
+        "y": 297.5,
+        "width": 771.328125,
+        "height": 578.484375
+      },
+      "horizontalOverflow": false
+    }
+  ],
+  "workers": [
+    {
+      "id": 0,
+      "url": "http://127.0.0.1:61826/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "createdAt": "2026-09-23T19:51:42.222Z",
+      "stage": "intentional-model-failure",
+      "closed": true,
+      "closedAt": "2026-09-23T19:51:42.482Z"
+    },
+    {
+      "id": 1,
+      "url": "http://127.0.0.1:61826/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "createdAt": "2026-09-23T19:51:42.764Z",
+      "stage": "cancel-model-initialization",
+      "closed": true,
+      "closedAt": "2026-09-23T19:51:42.980Z"
+    },
+    {
+      "id": 2,
+      "url": "http://127.0.0.1:61826/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "createdAt": "2026-09-23T19:51:43.071Z",
+      "stage": "real-image-retry",
+      "closed": true,
+      "closedAt": "2026-09-23T19:51:47.664Z"
+    },
+    {
+      "id": 3,
+      "url": "http://127.0.0.1:61826/edu-attendance-tracker/assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "createdAt": "2026-09-23T19:51:48.793Z",
+      "stage": "real-video-frame",
+      "closed": true,
+      "closedAt": "2026-09-23T19:51:56.856Z"
+    }
+  ],
+  "model": {
+    "path": "yolov8n.onnx",
+    "bytes": 12756454,
+    "sha256": "353ca4ab4fa9d4e5499d3300912faa30dae49718f90be8a159ff6af09a4e66b7",
+    "verification": "SHA-256 checked in worker before creating a session",
+    "externalData": false
+  },
+  "videoInput": {
+    "file": "browserRecognition-ui-input.mp4",
+    "bytes": 2042,
+    "sha256": "242c3cbca6fdc93ed4a1050a75529daf4805ec7c06d20837411f616550e16ee9",
+    "width": 320,
+    "height": 240,
+    "fps": 4,
+    "durationSeconds": 6,
+    "generator": "ffmpeg lavfi white, libx264, one encoder/filter thread"
+  },
+  "compiledAssets": [
+    {
+      "path": "assets/index-D1v2uLVK.js",
+      "bytes": 213355,
+      "sha256": "edb3078d0eb47e61399ac91bcf1b8cfcb5a2e776cc9e88c2c547e917f9ed9f49"
+    },
+    {
+      "path": "assets/AdminPage-kO6AnTSw.js",
+      "bytes": 724,
+      "sha256": "3bfd29bf0e4ecc14359a09a8e7abaad2deb1efdab3612dfa647303d569bc2800"
+    },
+    {
+      "path": "assets/AnalyticsPage-CU8zmOvm.js",
+      "bytes": 7154,
+      "sha256": "2982dea0036dead8a1ac7adb0993f0ea81c988ce6e7d0e0bcbf69bb18c11bb45"
+    },
+    {
+      "path": "assets/CamerasPage-DQyiIWWG.js",
+      "bytes": 11617,
+      "sha256": "bdec15c0edb207f9ad8668acb41454ce834e31c8142a330a58954366521cafd9"
+    },
+    {
+      "path": "assets/CatalogPage-CsvAVLyx.js",
+      "bytes": 6213,
+      "sha256": "6e629f309e5ec804d4c22a35e151f51551985debd0ab9a3b831004d3aef8b223"
+    },
+    {
+      "path": "assets/DashboardPage-BnoQNacG.js",
+      "bytes": 6361,
+      "sha256": "544b8056312d154f22bccd15be3d39f308d2a5e023f7f641b4f31dcd81cc73cc"
+    },
+    {
+      "path": "assets/LineChart-DKn3TIzE.js",
+      "bytes": 378612,
+      "sha256": "c80ea6dc0c50095a2ca5d2d8a99ce6193596172c10894b359e7b8d405d1fd356"
+    },
+    {
+      "path": "assets/LocalRecognitionDialog-BENks6xQ.js",
+      "bytes": 15004,
+      "sha256": "5232d7df9a01dd4c7384fb0a15182e4db38cbf01b28d31ea23fb42778be77a2f"
+    },
+    {
+      "path": "assets/Modal-BlDTyb1q.js",
+      "bytes": 1546,
+      "sha256": "1aead04d4375df3d4250c7a13d2177eedf0b0cd065559ec66c5413fc28dcb77f"
+    },
+    {
+      "path": "assets/Provenance-DQIUf4ci.js",
+      "bytes": 426,
+      "sha256": "d5905750ace66fcf4e122adb1d25d08008f7b99dcdb59e2276c0afc4c583f197"
+    },
+    {
+      "path": "assets/RateCell-Br47BI6x.js",
+      "bytes": 763,
+      "sha256": "880c4411970b6be9b89a9ad59a15ed8d6b63002f1e6b84dfe657015adfbb0e14"
+    },
+    {
+      "path": "assets/RecognitionPage-BCfR4vQ3.js",
+      "bytes": 10142,
+      "sha256": "81bd6defeb1bfb0ef893b0a68fe45a41905812c7efaebf594c1affd3cf18079d"
+    },
+    {
+      "path": "assets/SchedulePage-BVwuWhLQ.js",
+      "bytes": 6656,
+      "sha256": "0e7b39e8c9278bdef85fef0d51f5691f17d8c8bd4757d324b1600ea26627fc40"
+    },
+    {
+      "path": "assets/SessionDetailPage-CZRJKs-Y.js",
+      "bytes": 8930,
+      "sha256": "38f1bccea2f9b7faef54fa1f5837af79cd051578c56f020fc5813cc61e2ff61d"
+    },
+    {
+      "path": "assets/SessionsPage-UHsBSU3H.js",
+      "bytes": 6626,
+      "sha256": "4a63875df58cfff27d3dc167f0f0fe92b2922fbfa79910f19a0d7167695388eb"
+    },
+    {
+      "path": "assets/StatCard-BlF7Xslm.js",
+      "bytes": 503,
+      "sha256": "ecd536a3c9c5a8b75265c786efd195b20bcadf17b464f5fc449c8b09858b24c0"
+    },
+    {
+      "path": "assets/SystemPage-CU9jekuz.js",
+      "bytes": 735,
+      "sha256": "c70f6e4845b64aa3519f613c202108608ff95a3992710980a8a8be46baa98dc7"
+    },
+    {
+      "path": "assets/WeekBadge-B1rw5VcS.js",
+      "bytes": 246,
+      "sha256": "23194027654cedc96c9976598bd035707d51edbf1d21ba37441ca48e58f39bad"
+    },
+    {
+      "path": "assets/management-DnsXz4fJ.js",
+      "bytes": 912,
+      "sha256": "e763abe8087452aa9556179393573075d127042ada398d6e98a59f0e21bb9525"
+    },
+    {
+      "path": "assets/staticClient-CwEk3cHR.js",
+      "bytes": 7600,
+      "sha256": "5751b33f2aaf0340c1d5585add8725688a1ee6c929b101addb77c82d52700d89"
+    },
+    {
+      "path": "assets/status-KtLNB2Vo.js",
+      "bytes": 1505,
+      "sha256": "675701e8398128de310d8143a3b3e9bd08a4d4e4efadc2412a6a7906c2a34280"
+    },
+    {
+      "path": "assets/browserRecognition.bootstrap-pT5JNMta.js",
+      "bytes": 583,
+      "sha256": "a1782cfb39189b2c9ba27384b30ddd69f6e516a52af779ee111025fa2d64a16c"
+    },
+    {
+      "path": "assets/golos-text-cyrillic-ext-wght-normal-hICkpzq7.woff2",
+      "bytes": 17508,
+      "sha256": "70cf502d77aa23c8a573db8853f20a8db705d18414d170f257a9e939113aad47"
+    },
+    {
+      "path": "assets/golos-text-cyrillic-wght-normal-mKek_fSS.woff2",
+      "bytes": 22032,
+      "sha256": "17d048ca05cb1218af3c0d6dcdf882989e6d1cc5dcb598ea50eaf54850ff7229"
+    },
+    {
+      "path": "assets/golos-text-latin-ext-wght-normal-B-I5lbAQ.woff2",
+      "bytes": 19180,
+      "sha256": "05befabe4813f41238ce6ea4f5ecd6b758591e9ef2f303a9932bff68ba66dc66"
+    },
+    {
+      "path": "assets/golos-text-latin-wght-normal-BS5oQT7X.woff2",
+      "bytes": 37916,
+      "sha256": "9a69d0aa4734c4022224c002a3d944a702e0204972a49d892789f5668b922c2a"
+    },
+    {
+      "path": "assets/index-6hjWsSXy.css",
+      "bytes": 38295,
+      "sha256": "64ede5c48b101f683d589412d6590afb6ded623862202f534eea672e13576cbb"
+    },
+    {
+      "path": "assets/onest-cyrillic-ext-wght-normal-DOFToQv1.woff2",
+      "bytes": 10540,
+      "sha256": "268f03691b3d06e57abcf20f9277e314ea8784298983aab5b40c1b91965027e1"
+    },
+    {
+      "path": "assets/onest-cyrillic-wght-normal-DayYxulF.woff2",
+      "bytes": 15860,
+      "sha256": "68e5e01d6265bd68967746d4f5a9d18d0e6cbb5d15583c7082d6384ab1229b27"
+    },
+    {
+      "path": "assets/onest-latin-ext-wght-normal-QAhDxQuo.woff2",
+      "bytes": 28452,
+      "sha256": "14e7d3079b75860e2ab50efc6c318c398fdb46ede9b56e625f12ae70a3c5d9a4"
+    },
+    {
+      "path": "assets/onest-latin-wght-normal-Dun_Rd-l.woff2",
+      "bytes": 33760,
+      "sha256": "052df74533250c2e0ca0c4bdd32de594e107d99c1648e63820ef9c6142067828"
+    },
+    {
+      "path": "assets/onest-math-wght-normal-Bl4ZGkZl.woff2",
+      "bytes": 25480,
+      "sha256": "c74952a8c0c8c558c4f879f83773cf529d11350609f7073f5b2c5999dec46041"
+    },
+    {
+      "path": "assets/onest-symbols-wght-normal-DxQzqQfC.woff2",
+      "bytes": 18168,
+      "sha256": "2ec2d45d2ec0770e2c18cba2dba5126cf2dcff181d23ad192e9fffeb4af4b0b6"
+    },
+    {
+      "path": "assets/onest-vietnamese-wght-normal-BBxOatbv.woff2",
+      "bytes": 12400,
+      "sha256": "d852d4d094a3a46d701d16245deb7ca83b16b5bd69e20aa0aba089392ad69474"
+    },
+    {
+      "path": "assets/browserRecognition.worker-EptcNQ0l.js",
+      "bytes": 5394,
+      "sha256": "7eb466713e6b56d636b6a322dcb9cbf84cae3467196f2d0dee5e5c69e8918531"
+    },
+    {
+      "path": "index.html",
+      "bytes": 558,
+      "sha256": "82a6f7e9d3bca6ae55488687a1e67cebff9a6635c137d5dec6fb4d602accae67"
+    }
+  ],
+  "imageInput": {
+    "file": "browserRecognition-ui-input.png",
+    "bytes": 2544,
+    "sha256": "af64319d161e99a8dffdcbd28e4a5775593302671f592509e9b5113042855a97",
+    "width": 320,
+    "height": 240,
+    "generator": "Browser canvas, solid white"
+  },
+  "runtime": {
+    "versions": {
+      "common": "1.22.0",
+      "web": "1.22.0"
+    },
+    "numThreads": 1,
+    "wasmPaths": "http://127.0.0.1:61826/edu-attendance-tracker/ort/"
+  },
+  "finishedAt": "2026-09-23T19:52:07.034Z",
+  "cleanup": {
+    "browserClosed": true,
+    "serverClosed": true
+  }
+}

@@ -1,0 +1,24 @@
+stateDiagram-v2
+  [*] --> pending
+  pending --> processing: SKIP LOCKED, token, attempts++
+  processing --> processing: heartbeat при живом lease
+  processing --> completed: CAS + INSERT result, один commit
+  processing --> retry_wait: временная ошибка / lease expired
+  retry_wait --> pending: maintenance, backoff окончен
+  processing --> failed: постоянная ошибка / лимит попыток
+  pending --> failed: лимит попыток
+  retry_wait --> failed: лимит попыток
+  pending --> cancelled: отмена связанного занятия
+  processing --> cancelled: отмена связанного занятия
+  retry_wait --> cancelled: отмена связанного занятия
+  note right of processing
+    PUT артефакта до SQL commit.
+    Ключ job/attempt/token неизменяем для попытки.
+    Потеря lease запрещает публикацию результата.
+    Отмена очищает claim capture и upload jobs.
+    Параллельное вычисление возможно, exactly-once не обещается.
+  end note
+  note right of completed
+    Retry upload создаёт новую job, не стирает результат.
+    Автоповтор использует ту же job с новой попыткой.
+  end note

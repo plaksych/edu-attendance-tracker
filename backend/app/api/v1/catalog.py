@@ -31,7 +31,9 @@ def _create(db: DbSession, instance):
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(status.HTTP_409_CONFLICT, "Такая запись уже существует") from None
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Такая запись уже существует"
+        ) from None
     return instance
 
 
@@ -143,9 +145,7 @@ def list_classrooms(db: DbSession = Depends(get_db)):
 )
 def create_classroom(payload: ClassroomCreate, db: DbSession = Depends(get_db)):
     classroom = _create(db, Classroom(**payload.model_dump()))
-    return db.scalars(
-        _classrooms_query().where(Classroom.id == classroom.id)
-    ).one()
+    return db.scalars(_classrooms_query().where(Classroom.id == classroom.id)).one()
 
 
 @router.patch(

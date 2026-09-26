@@ -1,0 +1,53 @@
+{
+  "scanner": "pip-audit==2.9.0 / npm audit",
+  "time": "2026-09-23T20:25:31.152362+00:00",
+  "scope": "locked packages; no application exploitability determination",
+  "checks": {
+    "backend": {
+      "exit_code": 0,
+      "lock_sha256": "af22eb928269b5e3f6366e7aa7836eac5a2e7ed362ad7c8ad1c705ab55f95b10",
+      "vulnerabilities": 0,
+      "unassessed": []
+    },
+    "capture": {
+      "exit_code": 0,
+      "lock_sha256": "97acc82d9398c5c173bf639f1b0417ddff3013e408a914c0ad267f66feae293e",
+      "vulnerabilities": 0,
+      "unassessed": []
+    },
+    "recognition": {
+      "exit_code": 0,
+      "lock_sha256": "e92ee016eea2446feac584d84833a472191a8b0ad044f22a82268016a7858300",
+      "vulnerabilities": 0,
+      "unassessed": [],
+      "platform_index_unassessed": [
+        "torch",
+        "torchvision"
+      ]
+    },
+    "ops": {
+      "exit_code": 0,
+      "lock_sha256": "28719dd55e7d1c1b32c44b79f7164b7bf4d0f68be4c5100a783715857567cb9c",
+      "vulnerabilities": 0,
+      "unassessed": []
+    },
+    "recognition-upstream": {
+      "exit_code": 0,
+      "requirements_sha256": "256dd7f56f9e5a8c23cf3d724362a8861f61ada2c087b09b9e3bd6dd925ae60a",
+      "vulnerabilities": 0,
+      "scope": "Official CPU wheel upstream package versions; binary/OS scan remains separate"
+    },
+    "frontend": {
+      "exit_code": 0,
+      "lock_sha256": "52ea751a7a9203b8eb9f3e327f5f80609dec0c2ed22561a59458113586f4fe36",
+      "counts": {
+        "info": 0,
+        "low": 0,
+        "moderate": 0,
+        "high": 0,
+        "critical": 0,
+        "total": 0
+      }
+    }
+  }
+}

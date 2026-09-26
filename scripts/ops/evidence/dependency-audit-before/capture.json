@@ -1,0 +1,148 @@
+{
+  "dependencies": [
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "vulns": []
+    },
+    {
+      "name": "argon2-cffi",
+      "version": "25.1.0",
+      "vulns": []
+    },
+    {
+      "name": "argon2-cffi-bindings",
+      "version": "26.1.0",
+      "vulns": []
+    },
+    {
+      "name": "certifi",
+      "version": "2026.7.22",
+      "vulns": []
+    },
+    {
+      "name": "cffi",
+      "version": "2.1.1",
+      "vulns": []
+    },
+    {
+      "name": "cryptography",
+      "version": "46.0.5",
+      "vulns": [
+        {
+          "id": "PYSEC-2026-36",
+          "fix_versions": [
+            "46.0.7"
+          ],
+          "aliases": [
+            "CVE-2026-39892",
+            "GHSA-p423-j2cm-9vmq"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-35",
+          "fix_versions": [
+            "46.0.6"
+          ],
+          "aliases": [
+            "CVE-2026-34073",
+            "GHSA-m959-cc7f-wv43"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3552",
+          "fix_versions": [
+            "50.0.0"
+          ],
+          "aliases": [
+            "CVE-2026-69247",
+            "GHSA-g6cj-pr64-35w5"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3553",
+          "fix_versions": [
+            "49.0.0"
+          ],
+          "aliases": [
+            "CVE-2026-69249",
+            "GHSA-jwv3-5hgf-82ww"
+          ]
+        },
+        {
+          "id": "PYSEC-2026-3554",
+          "fix_versions": [
+            "49.0.0"
+          ],
+          "aliases": [
+            "CVE-2026-69248",
+            "GHSA-m2h6-j472-rp4c"
+          ]
+        },
+        {
+          "id": "GHSA-537c-gmf6-5ccf",
+          "fix_versions": [
+            "48.0.1"
+          ],
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "name": "minio",
+      "version": "7.2.15",
+      "vulns": []
+    },
+    {
+      "name": "psycopg2-binary",
+      "version": "2.9.10",
+      "vulns": []
+    },
+    {
+      "name": "pycparser",
+      "version": "3.0",
+      "vulns": []
+    },
+    {
+      "name": "pycryptodome",
+      "version": "3.23.0",
+      "vulns": []
+    },
+    {
+      "name": "pydantic",
+      "version": "2.11.4",
+      "vulns": []
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.33.2",
+      "vulns": []
+    },
+    {
+      "name": "pydantic-settings",
+      "version": "2.9.1",
+      "vulns": []
+    },
+    {
+      "name": "python-dotenv",
+      "version": "1.2.3",
+      "vulns": []
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "vulns": []
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "vulns": []
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "vulns": []
+    }
+  ],
+  "fixes": []
+}

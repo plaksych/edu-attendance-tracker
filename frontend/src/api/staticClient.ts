@@ -1,823 +1,106 @@
-import type {
-  AggregationMode,
-  Camera,
-  CameraRole,
-  Capture,
-  CaptureMedia,
-  Classroom,
-  Discipline,
-  EntityStats,
-  Group,
-  GroupTimeline,
-  ImportResult,
-  RecognitionEvaluationSummary,
-  RecognitionUpload,
-  RecognitionUploadMedia,
-  ScheduleItem,
-  Session,
-  SessionDetail,
-  SummaryStats,
-  Teacher,
-  WeekType,
-  WeekTypeInfo,
-} from './types'
+import type { AggregationMode, Camera, CameraRole, CaptureMedia, Classroom, Discipline, EntityStats, Group, GroupTimeline, ImportResult, RecognitionEvaluationSummary, RecognitionUpload, RecognitionUploadMedia, ScheduleItem, Session, SessionDetail, SummaryStats, Teacher, WeekTypeInfo } from './types'
+import { DEMO_DATE, shiftDate } from '../lib/format'
 
-interface DemoData {
-  source: string
-  semester_start: string
-  import_result: ImportResult
-  groups: Group[]
-  teachers: Teacher[]
-  disciplines: Discipline[]
-  classrooms: Classroom[]
-  cameras: Camera[]
-  schedule: ScheduleItem[]
+const clone = <T,>(value: T): T => structuredClone(value)
+const groups: Group[] = [24, 32, 18].map((count, index) => ({ id: index + 1, name: `Учебная группа ${index + 1}`, course: index + 1, faculty: 'Учебный факультет', students_count: count }))
+const fixtureGroupSizes = new Map(groups.map(group => [group.id, group.students_count]))
+const teachers: Teacher[] = groups.map(g => ({ id: g.id, full_name: `Преподаватель ${g.id}`, email: null, department: 'Учебная кафедра' }))
+const disciplines: Discipline[] = ['Прикладная математика', 'Информационные системы', 'Основы статистики'].map((name, index) => ({ id: index + 1, name }))
+const classrooms: Classroom[] = groups.map(g => ({ id: g.id, number: `Д-${100 + g.id}`, capacity: 40, aggregation_mode: 'single', cameras: [] }))
+let cameras: Camera[] = []
+const schedule: ScheduleItem[] = Array.from({ length: 15 }, (_, index) => {
+  const entity = index % 3
+  return { id: index + 1, weekday: Math.floor(index / 3) + 1, starts_at: ['09:00:00', '11:00:00', '14:00:00'][entity], ends_at: ['10:30:00', '12:30:00', '15:30:00'][entity], week_type: 'every', lesson_type: 'практика', group: groups[entity], teacher: teachers[entity], discipline: disciplines[(entity + Math.floor(index / 3)) % 3], classroom: classrooms[entity] }
+})
+const cancelled = new Set<number>()
+function find<T extends { id: number }>(items: T[], id: number): T {
+  const item = items.find(value => value.id === id)
+  if (!item) throw new Error('Запись не найдена')
+  return item
 }
-
-interface ScheduleFilter {
-  group_id?: number
-  weekday?: number
+function scheduleOn(date: string) {
+  const weekday = new Date(`${date}T12:00:00Z`).getUTCDay() || 7
+  return schedule.filter(item => item.weekday === weekday)
 }
-
-const DATA_URL = `${import.meta.env.BASE_URL}demo-data.json`
-const RECOGNITION_DEMO_URL = `${import.meta.env.BASE_URL}recognition-demo/`
-const OFFSET_MINUTES = 15
-
-let statePromise: Promise<DemoData> | null = null
-let state: DemoData | null = null
-const cancelledSessions = new Set<number>()
-
-const recognitionUploads: RecognitionUpload[] = [
-  {
-    id: 107,
-    filename: 'лекция_ближний_ракурс.jpg',
-    media_type: 'image',
-    content_type: 'image/jpeg',
-    size_bytes: 501_367,
-    label: 'Лекционная аудитория, ближний ракурс',
-    reference_people_count: null,
-    created_at: '2026-07-17T14:12:00+03:00',
-    job: {
-      id: 207,
-      status: 'completed',
-      attempts: 1,
-      model_name: 'yolov8n',
-      model_version: '8',
-      sample_rate_fps: 1,
-      confidence_threshold: 0.35,
-      started_at: '2026-07-17T14:12:01+03:00',
-      finished_at: '2026-07-17T14:12:03+03:00',
-      error: null,
-      result: {
-        people_count: 42,
-        detected_median: 42,
-        detected_percentile_75: 42,
-        detected_max: 42,
-        average_confidence: 0.6701,
-        count_stddev: 0,
-        sampled_frames: 1,
-        source_frames: 1,
-        source_duration_ms: 0,
-        representative_frame_ms: 0,
-        absolute_error: null,
-        relative_error: null,
-        within_tolerance: null,
-        media_expires_at: null,
-      },
-    },
-  },
-  {
-    id: 106,
-    filename: 'лекция_полная_группа.jpg',
-    media_type: 'image',
-    content_type: 'image/jpeg',
-    size_bytes: 509_783,
-    label: 'Лекционная аудитория, полная группа',
-    reference_people_count: null,
-    created_at: '2026-07-17T14:10:00+03:00',
-    job: {
-      id: 206,
-      status: 'completed',
-      attempts: 1,
-      model_name: 'yolov8n',
-      model_version: '8',
-      sample_rate_fps: 1,
-      confidence_threshold: 0.35,
-      started_at: '2026-07-17T14:10:01+03:00',
-      finished_at: '2026-07-17T14:10:03+03:00',
-      error: null,
-      result: {
-        people_count: 72,
-        detected_median: 72,
-        detected_percentile_75: 72,
-        detected_max: 72,
-        average_confidence: 0.6658,
-        count_stddev: 0,
-        sampled_frames: 1,
-        source_frames: 1,
-        source_duration_ms: 0,
-        representative_frame_ms: 0,
-        absolute_error: null,
-        relative_error: null,
-        within_tolerance: null,
-        media_expires_at: null,
-      },
-    },
-  },
-  {
-    id: 105,
-    filename: 'лекция_высокая_наполняемость.jpg',
-    media_type: 'image',
-    content_type: 'image/jpeg',
-    size_bytes: 437_248,
-    label: 'Лекционная аудитория, высокая наполняемость',
-    reference_people_count: null,
-    created_at: '2026-07-17T14:08:00+03:00',
-    job: {
-      id: 205,
-      status: 'completed',
-      attempts: 1,
-      model_name: 'yolov8n',
-      model_version: '8',
-      sample_rate_fps: 1,
-      confidence_threshold: 0.35,
-      started_at: '2026-07-17T14:08:01+03:00',
-      finished_at: '2026-07-17T14:08:04+03:00',
-      error: null,
-      result: {
-        people_count: 62,
-        detected_median: 62,
-        detected_percentile_75: 62,
-        detected_max: 62,
-        average_confidence: 0.62,
-        count_stddev: 0,
-        sampled_frames: 1,
-        source_frames: 1,
-        source_duration_ms: 0,
-        representative_frame_ms: 0,
-        absolute_error: null,
-        relative_error: null,
-        within_tolerance: null,
-        media_expires_at: null,
-      },
-    },
-  },
-  {
-    id: 104,
-    filename: 'занятие_аудитория_305.mp4',
-    media_type: 'video',
-    content_type: 'video/mp4',
-    size_bytes: 1_161_216,
-    label: 'Аудитория 305, дневной замер',
-    reference_people_count: 8,
-    created_at: '2026-07-14T10:08:00+03:00',
-    job: {
-      id: 204,
-      status: 'completed',
-      attempts: 1,
-      model_name: 'yolov8n',
-      model_version: '8',
-      sample_rate_fps: 2,
-      confidence_threshold: 0.35,
-      started_at: '2026-07-14T10:08:05+03:00',
-      finished_at: '2026-07-14T10:08:19+03:00',
-      error: null,
-      result: {
-        people_count: 8,
-        detected_median: 8,
-        detected_percentile_75: 8,
-        detected_max: 9,
-        average_confidence: 0.89,
-        count_stddev: 0.43,
-        sampled_frames: 18,
-        source_frames: 270,
-        source_duration_ms: 9000,
-        representative_frame_ms: 4500,
-        absolute_error: 0,
-        relative_error: 0,
-        within_tolerance: true,
-        media_expires_at: null,
-      },
-    },
-  },
-  {
-    id: 103,
-    filename: 'лекция_поток_214.jpg',
-    media_type: 'image',
-    content_type: 'image/jpeg',
-    size_bytes: 206_848,
-    label: 'Поточная аудитория, фронтальный ракурс',
-    reference_people_count: 12,
-    created_at: '2026-07-14T09:57:00+03:00',
-    job: {
-      id: 203,
-      status: 'completed',
-      attempts: 1,
-      model_name: 'yolov8n',
-      model_version: '8',
-      sample_rate_fps: 1,
-      confidence_threshold: 0.35,
-      started_at: '2026-07-14T09:57:04+03:00',
-      finished_at: '2026-07-14T09:57:08+03:00',
-      error: null,
-      result: {
-        people_count: 11,
-        detected_median: 11,
-        detected_percentile_75: 11,
-        detected_max: 11,
-        average_confidence: 0.84,
-        count_stddev: 0,
-        sampled_frames: 1,
-        source_frames: 1,
-        source_duration_ms: 0,
-        representative_frame_ms: 0,
-        absolute_error: 1,
-        relative_error: 1 / 12,
-        within_tolerance: true,
-        media_expires_at: null,
-      },
-    },
-  },
-  {
-    id: 102,
-    filename: 'семинар_вечер_118.jpg',
-    media_type: 'image',
-    content_type: 'image/jpeg',
-    size_bytes: 206_848,
-    label: 'Семинар, сниженная освещённость',
-    reference_people_count: 6,
-    created_at: '2026-07-14T09:44:00+03:00',
-    job: {
-      id: 202,
-      status: 'completed',
-      attempts: 1,
-      model_name: 'yolov8n',
-      model_version: '8',
-      sample_rate_fps: 1,
-      confidence_threshold: 0.4,
-      started_at: '2026-07-14T09:44:03+03:00',
-      finished_at: '2026-07-14T09:44:06+03:00',
-      error: null,
-      result: {
-        people_count: 6,
-        detected_median: 6,
-        detected_percentile_75: 6,
-        detected_max: 6,
-        average_confidence: 0.87,
-        count_stddev: 0,
-        sampled_frames: 1,
-        source_frames: 1,
-        source_duration_ms: 0,
-        representative_frame_ms: 0,
-        absolute_error: 0,
-        relative_error: 0,
-        within_tolerance: true,
-        media_expires_at: null,
-      },
-    },
-  },
-]
-
-function recognitionMedia(uploadId: number): RecognitionUploadMedia {
-  const filenameByUploadId: Record<number, string> = {
-    105: '03-large-lecture-hall-report.jpg',
-    106: '04-full-lecture-hall-report.jpg',
-    107: '05-close-lecture-hall-report.jpg',
-  }
-  const filename = filenameByUploadId[uploadId]
-    ?? (uploadId === 103 ? 'lecture-twelve.jpg' : uploadId === 102 ? 'seminar-six.jpg' : 'classroom-eight.jpg')
-  const source = `${RECOGNITION_DEMO_URL}${filename}`
+function makeSession(item: ScheduleItem, date: string): SessionDetail {
+  const id = Number(date.replace(/-/g, '')) * 100 + item.id
+  const variation = (item.id + Number(date.slice(-2))) % 7
+  const expected = fixtureGroupSizes.get(item.group.id) ?? item.group.students_count
+  const startsAt = Date.parse(`${date}T${item.starts_at}+03:00`)
+  const endsAt = Date.parse(`${date}T${item.ends_at}+03:00`)
+  const offset = Math.min(15 * 60_000, (endsAt - startsAt) / 3)
+  const after = variation === 0 ? 0 : Math.round(expected * (0.65 + variation * 0.06))
+  const partial = variation === 2
+  const failed = variation === 3
+  const before = partial || failed ? null : Math.max(0, after - 2)
+  const isCancelled = cancelled.has(id)
+  const counts = [failed || isCancelled ? null : after, isCancelled ? null : before]
+  const measured = counts.filter((value): value is number => value !== null)
+  const average = measured.length ? measured.reduce((sum, value) => sum + value, 0) / measured.length : null
   return {
-    source_url: uploadId === 104 ? `${RECOGNITION_DEMO_URL}classroom-eight.mp4` : source,
-    source_unavailable_reason: null,
-    annotated_url: source,
-    annotated_unavailable_reason: null,
-    expires_in_seconds: 0,
+    id, date, provenance: 'demo_fixture', schedule: clone(item), status: isCancelled ? 'cancelled' : 'finished',
+    started_at: `${date}T${item.starts_at}+03:00`, finished_at: `${date}T${item.ends_at}+03:00`,
+    attendance: isCancelled ? null : { expected_count: expected, after_start_count: counts[0], before_end_count: counts[1], detected_average: average, detected_max: measured.length ? Math.max(...measured) : null, attendance_rate: average !== null && expected > 0 ? average / expected : null, calculation_status: failed ? 'failed' : partial ? 'partial' : 'complete', calculated_at: `${date}T16:00:00+03:00` },
+    measurements: counts.map((count, index) => ({ id: id * 10 + index, provenance: 'demo_fixture', type: index === 0 ? 'after_start' : 'before_end', planned_at: new Date(index === 0 ? startsAt + offset : endsAt - offset).toISOString(), status: isCancelled ? 'cancelled' : count === null ? 'failed' : 'completed', final_people_count: count, confidence: null, aggregation_method: 'single', error: count === null && !isCancelled ? 'Учебный сценарий: материал отсутствует' : null, captures: [] })),
   }
 }
-
-function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T
+function history() {
+  return Array.from({ length: 14 }, (_, i) => shiftDate(DEMO_DATE, i - 13)).flatMap(date => scheduleOn(date).map(item => makeSession(item, date)))
 }
-
-async function loadData(): Promise<DemoData> {
-  if (state) return state
-  if (!statePromise) {
-    statePromise = fetchDemoJson(DATA_URL).catch((error) => {
-      if (DATA_URL === '/demo-data.json') throw error
-      return fetchDemoJson('/demo-data.json')
-    })
-  }
-  state = await statePromise
-  return state
+function statsFor(sessions: Session[], id: number, name: string): EntityStats {
+  const valid = sessions.filter(s => s.attendance?.detected_average !== null && s.attendance?.detected_average !== undefined && s.attendance.expected_count > 0)
+  const expected = valid.reduce((sum, s) => sum + s.attendance!.expected_count, 0)
+  const count = valid.reduce((sum, s) => sum + s.attendance!.detected_average!, 0)
+  return { id, name, sessions_finished: sessions.length, avg_rate: expected ? count / expected : null, avg_detected: valid.length ? count / valid.length : null, records_complete: sessions.filter(s => s.attendance?.calculation_status === 'complete').length, records_partial: sessions.filter(s => s.attendance?.calculation_status === 'partial').length, records_failed: sessions.filter(s => s.attendance?.calculation_status === 'failed').length, breakdown: [] }
 }
-
-async function fetchDemoJson(url: string): Promise<DemoData> {
-  return fetch(url).then((response) => {
-    if (!response.ok) throw new Error('Не удалось загрузить demo-data.json')
-    const contentType = response.headers.get('content-type') ?? ''
-    if (!contentType.includes('application/json')) {
-      throw new Error('demo-data.json недоступен по ожидаемому пути')
-    }
-    return response.json() as Promise<DemoData>
+function entity(id: number, dimension: 'group' | 'teacher' | 'discipline'): EntityStats {
+  const sessions = history().filter(s => s.schedule[dimension]?.id === id)
+  const name = dimension === 'teacher' ? find(teachers, id).full_name : find(dimension === 'group' ? groups : disciplines, id).name
+  const stats = statsFor(sessions, id, name)
+  const other = dimension === 'group' ? 'discipline' : 'group'
+  stats.breakdown = [...new Set(sessions.map(s => s.schedule[other].id))].map(key => {
+    const subset = sessions.filter(s => s.schedule[other].id === key)
+    const result = statsFor(subset, key, subset[0].schedule[other].name)
+    return { id: key, name: result.name, sessions: subset.length, avg_rate: result.avg_rate, avg_detected: result.avg_detected }
   })
+  return stats
 }
 
-function nextId(items: { id: number }[]): number {
-  return Math.max(0, ...items.map((item) => item.id)) + 1
-}
-
-function assertFound<T>(value: T | undefined | null, message: string): T {
-  if (value === undefined || value === null) throw new Error(message)
-  return value
-}
-
-function weekTypeForDate(data: DemoData, iso: string): WeekType {
-  const start = new Date(`${data.semester_start}T12:00:00`)
-  const current = new Date(`${iso}T12:00:00`)
-  const days = Math.floor((current.getTime() - start.getTime()) / 86_400_000)
-  const week = Math.floor(days / 7)
-  return week % 2 === 0 ? 'white' : 'green'
-}
-
-function weekday(iso: string): number {
-  const day = new Date(`${iso}T12:00:00`).getDay()
-  return day === 0 ? 7 : day
-}
-
-function localDateTime(iso: string, time: string, minutes: number): string {
-  const date = new Date(`${iso}T${time}`)
-  date.setMinutes(date.getMinutes() + minutes)
-  const yyyy = date.getFullYear()
-  const mm = String(date.getMonth() + 1).padStart(2, '0')
-  const dd = String(date.getDate()).padStart(2, '0')
-  const hh = String(date.getHours()).padStart(2, '0')
-  const min = String(date.getMinutes()).padStart(2, '0')
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}:00`
-}
-
-function sessionId(date: string, scheduleId: number): number {
-  return Number(date.replace(/-/g, '')) * 10_000 + scheduleId
-}
-
-function splitSessionId(id: number): { date: string; scheduleId: number } {
-  const day = Math.floor(id / 10_000)
-  const scheduleId = id % 10_000
-  const text = String(day)
-  return {
-    date: `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`,
-    scheduleId,
-  }
-}
-
-function seed(date: string, scheduleId: number): number {
-  return (
-    scheduleId * 17 +
-    [...date].reduce((sum, char) => sum + char.charCodeAt(0), 0)
-  )
-}
-
-function countsFor(schedule: ScheduleItem, date: string) {
-  const expected = schedule.group.students_count
-  const base = seed(date, schedule.id)
-  const after = Math.max(0, Math.min(expected, Math.round(expected * (0.72 + (base % 16) / 100))))
-  const before = Math.max(0, Math.min(expected, after - 2 + (base % 5)))
-  const average = Number(((after + before) / 2).toFixed(2))
-  return { expected, after, before, average, max: Math.max(after, before) }
-}
-
-function capturesFor(schedule: ScheduleItem, date: string, measurementId: number, count: number): Capture[] {
-  const links = schedule.classroom?.cameras ?? []
-  return links.map((link, index) => ({
-    id: measurementId * 10 + index + 1,
-    camera: link.camera,
-    status: 'completed',
-    planned_at: localDateTime(date, schedule.starts_at, OFFSET_MINUTES),
-    attempts: 1,
-    size_bytes: 2_200_000 + index * 180_000,
-    duration_ms: 20_000,
-    error: null,
-    has_video: true,
-    result: {
-      people_count: count,
-      detected_median: count,
-      detected_percentile_75: count + (index % 2),
-      detected_max: count + 1,
-      average_confidence: 0.82,
-      count_stddev: 0.4,
-      sampled_frames: 20,
-      source_frames: 500,
-      source_duration_ms: 20_000,
-      representative_frame_ms: 9_500,
-      absolute_error: null,
-      relative_error: null,
-      within_tolerance: null,
-      media_expires_at: null,
-    },
-  }))
-}
-
-function buildSession(
-  schedule: ScheduleItem,
-  date: string,
-  detail = false,
-): Session | SessionDetail {
-  const id = sessionId(date, schedule.id)
-  const cancelled = cancelledSessions.has(id)
-  const counts = countsFor(schedule, date)
-  const rate = counts.expected > 0 ? Number(Math.min(counts.average / counts.expected, 1).toFixed(4)) : null
-  const firstId = id * 10 + 1
-  const secondId = id * 10 + 2
-  const aggregation = schedule.classroom?.aggregation_mode ?? 'single'
-  const first = {
-    id: firstId,
-    type: 'after_start' as const,
-    planned_at: localDateTime(date, schedule.starts_at, OFFSET_MINUTES),
-    status: cancelled ? ('cancelled' as const) : ('completed' as const),
-    final_people_count: cancelled ? null : counts.after,
-    confidence: cancelled ? null : 0.82,
-    aggregation_method: aggregation,
-    error: null,
-    ...(detail ? { captures: cancelled ? [] : capturesFor(schedule, date, firstId, counts.after) } : {}),
-  }
-  const second = {
-    id: secondId,
-    type: 'before_end' as const,
-    planned_at: localDateTime(date, schedule.ends_at, -OFFSET_MINUTES),
-    status: cancelled ? ('cancelled' as const) : ('completed' as const),
-    final_people_count: cancelled ? null : counts.before,
-    confidence: cancelled ? null : 0.81,
-    aggregation_method: aggregation,
-    error: null,
-    ...(detail ? { captures: cancelled ? [] : capturesFor(schedule, date, secondId, counts.before) } : {}),
-  }
-  return {
-    id,
-    date,
-    status: cancelled ? 'cancelled' : 'finished',
-    started_at: localDateTime(date, schedule.starts_at, 0),
-    finished_at: localDateTime(date, schedule.ends_at, 0),
-    schedule,
-    attendance: cancelled
-      ? null
-      : {
-          expected_count: counts.expected,
-          after_start_count: counts.after,
-          before_end_count: counts.before,
-          detected_average: counts.average,
-          detected_max: counts.max,
-          attendance_rate: rate,
-          calculation_status: 'complete',
-          calculated_at: localDateTime(date, schedule.ends_at, 5),
-        },
-    measurements: [first, second],
-  }
-}
-
-function scheduleForDate(data: DemoData, date: string): ScheduleItem[] {
-  const day = weekday(date)
-  const week = weekTypeForDate(data, date)
-  return data.schedule.filter(
-    (item) =>
-      item.weekday === day && (item.week_type === 'every' || item.week_type === week),
-  )
-}
-
-function rateFor(item: ScheduleItem): number {
-  const counts = countsFor(item, '2026-02-09')
-  return counts.expected > 0 ? Math.min(counts.average / counts.expected, 1) : 0
-}
-
-function entityStats(
-  items: ScheduleItem[],
-  id: number,
-  name: string,
-  breakdown: Map<number, { name: string; items: ScheduleItem[] }>,
-): EntityStats {
-  const rates = items.map(rateFor)
-  const avgRate = rates.length
-    ? Number((rates.reduce((sum, value) => sum + value, 0) / rates.length).toFixed(4))
-    : null
-  const avgDetected = items.length
-    ? Number(
-        (
-          items.reduce((sum, item) => sum + countsFor(item, '2026-02-09').average, 0) /
-          items.length
-        ).toFixed(2),
-      )
-    : null
-  return {
-    id,
-    name,
-    sessions_finished: items.length,
-    avg_rate: avgRate,
-    avg_detected: avgDetected,
-    records_complete: items.length,
-    records_partial: 0,
-    records_failed: 0,
-    breakdown: [...breakdown.entries()]
-      .map(([breakdownId, row]) => {
-        const rowRates = row.items.map(rateFor)
-        return {
-          id: breakdownId,
-          name: row.name,
-          sessions: row.items.length,
-          avg_rate: rowRates.length
-            ? Number((rowRates.reduce((sum, value) => sum + value, 0) / rowRates.length).toFixed(4))
-            : null,
-          avg_detected: row.items.length
-            ? Number(
-                (
-                  row.items.reduce((sum, item) => sum + countsFor(item, '2026-02-09').average, 0) /
-                  row.items.length
-                ).toFixed(2),
-              )
-            : null,
-        }
-      })
-      .sort((a, b) => a.name.localeCompare(b.name, 'ru')),
-  }
-}
+const uploads: RecognitionUpload[] = [{
+  id: 1, provenance: 'demo_fixture', filename: 'synthetic-classroom.png', label: 'Учебная сцена · схема аудитории', media_type: 'image', content_type: 'image/png', size_bytes: 20919, reference_people_count: null, created_at: `${DEMO_DATE}T09:15:00+03:00`,
+  job: { id: 1, status: 'completed', attempts: 0, model_name: 'Учебный пример', model_version: 'без инференса', sample_rate_fps: 1, confidence_threshold: 0.35, started_at: null, finished_at: null, error: null,
+    result: { provenance: 'demo_fixture', people_count: 18, detected_median: 18, detected_percentile_75: 18, detected_max: 18, average_confidence: null, count_stddev: 0, sampled_frames: 1, source_frames: 1, source_duration_ms: 0, representative_frame_ms: 0, absolute_error: null, relative_error: null, within_tolerance: null, media_expires_at: null },
+  },
+}]
 
 export const staticApi = {
-  async getGroups(): Promise<Group[]> {
-    return clone((await loadData()).groups)
-  },
-  async createGroup(payload: Omit<Group, 'id'>): Promise<Group> {
-    const data = await loadData()
-    if (data.groups.some((group) => group.name === payload.name)) {
-      throw new Error('Группа с таким названием уже существует')
-    }
-    const group = { ...payload, id: nextId(data.groups) }
-    data.groups.push(group)
-    return clone(group)
-  },
-  async updateGroup(id: number, payload: Partial<Omit<Group, 'id' | 'name'>>): Promise<Group> {
-    const data = await loadData()
-    const group = assertFound(data.groups.find((item) => item.id === id), 'Группа не найдена')
-    Object.assign(group, payload)
-    return clone(group)
-  },
-
-  async getTeachers(): Promise<Teacher[]> {
-    return clone((await loadData()).teachers)
-  },
-  async getDisciplines(): Promise<Discipline[]> {
-    return clone((await loadData()).disciplines)
-  },
-
-  async getClassrooms(): Promise<Classroom[]> {
-    return clone((await loadData()).classrooms)
-  },
-  async createClassroom(payload: { number: string; capacity: number | null }): Promise<Classroom> {
-    const data = await loadData()
-    const classroom: Classroom = {
-      id: nextId(data.classrooms),
-      number: payload.number,
-      capacity: payload.capacity,
-      aggregation_mode: 'single',
-      cameras: [],
-    }
-    data.classrooms.push(classroom)
-    return clone(classroom)
-  },
-  async updateClassroom(
-    id: number,
-    payload: { capacity?: number | null; aggregation_mode?: AggregationMode },
-  ): Promise<Classroom> {
-    const data = await loadData()
-    const classroom = assertFound(
-      data.classrooms.find((item) => item.id === id),
-      'Аудитория не найдена',
-    )
-    Object.assign(classroom, payload)
-    return clone(classroom)
-  },
-  async assignClassroomCameras(
-    id: number,
-    payload: { camera_id: number; role: CameraRole; priority: number; zone_code?: string | null }[],
-  ): Promise<Classroom> {
-    const data = await loadData()
-    const classroom = assertFound(
-      data.classrooms.find((item) => item.id === id),
-      'Аудитория не найдена',
-    )
-    classroom.cameras = payload.map((row) => {
-      const camera = assertFound(data.cameras.find((item) => item.id === row.camera_id), 'Камера не найдена')
-      camera.classroom_number = classroom.number
-      return {
-        camera: { id: camera.id, name: camera.name },
-        role: row.role,
-        priority: row.priority,
-        zone_code: row.zone_code ?? null,
-        enabled: camera.enabled,
-      }
-    })
-    return clone(classroom)
-  },
-
-  async getCameras(): Promise<Camera[]> {
-    return clone((await loadData()).cameras)
-  },
-  async createCamera(payload: {
-    name: string
-    rtsp_url: string
-    capture_group: string
-    enabled: boolean
-  }): Promise<Camera> {
-    const data = await loadData()
-    const camera: Camera = {
-      id: nextId(data.cameras),
-      classroom_number: null,
-      created_at: new Date().toISOString(),
-      ...payload,
-    }
-    data.cameras.push(camera)
-    return clone(camera)
-  },
-  async updateCamera(
-    id: number,
-    payload: Partial<{ name: string; rtsp_url: string; capture_group: string; enabled: boolean }>,
-  ): Promise<Camera> {
-    const data = await loadData()
-    const camera = assertFound(data.cameras.find((item) => item.id === id), 'Камера не найдена')
-    Object.assign(camera, payload)
-    for (const classroom of data.classrooms) {
-      for (const link of classroom.cameras) {
-        if (link.camera.id === id) {
-          link.camera.name = camera.name
-          link.enabled = camera.enabled
-        }
-      }
-    }
-    return clone(camera)
-  },
-  async deleteCamera(id: number): Promise<void> {
-    const data = await loadData()
-    data.cameras = data.cameras.filter((item) => item.id !== id)
-    for (const classroom of data.classrooms) {
-      classroom.cameras = classroom.cameras.filter((link) => link.camera.id !== id)
-    }
-  },
-
-  async getSchedule(params?: ScheduleFilter): Promise<ScheduleItem[]> {
-    const data = await loadData()
-    let items = data.schedule
-    if (params?.group_id) items = items.filter((item) => item.group.id === params.group_id)
-    if (params?.weekday) items = items.filter((item) => item.weekday === params.weekday)
-    return clone(items)
-  },
-  async importSchedule(_file: File): Promise<ImportResult> {
-    return clone((await loadData()).import_result)
-  },
-  async getWeekType(date: string): Promise<WeekTypeInfo> {
-    return { date, week_type: weekTypeForDate(await loadData(), date) }
-  },
-
-  async getSessions(date: string): Promise<Session[]> {
-    const data = await loadData()
-    return clone(scheduleForDate(data, date).map((item) => buildSession(item, date) as Session))
-  },
-  async getSession(id: number): Promise<SessionDetail> {
-    const data = await loadData()
-    const decoded = splitSessionId(id)
-    const item = assertFound(
-      data.schedule.find((schedule) => schedule.id === decoded.scheduleId),
-      'Занятие не найдено',
-    )
-    return clone(buildSession(item, decoded.date, true) as SessionDetail)
-  },
-  async cancelSession(id: number): Promise<Session> {
-    cancelledSessions.add(id)
-    const detail = await staticApi.getSession(id)
-    return clone(detail)
-  },
-  async getCaptureMedia(_captureId: number): Promise<CaptureMedia> {
-    return {
-      video_url: null,
-      video_unavailable_reason: 'Медиа недоступно в статическом режиме',
-      annotated_url: null,
-      annotated_unavailable_reason: 'Медиа недоступно в статическом режиме',
-      expires_in_seconds: 0,
-    }
-  },
-
-  async getRecognitionUploads(): Promise<RecognitionUpload[]> {
-    return clone(recognitionUploads)
-  },
-  async getRecognitionUploadMedia(uploadId: number): Promise<RecognitionUploadMedia> {
-    if (!recognitionUploads.some((item) => item.id === uploadId)) {
-      throw new Error('Материал распознавания не найден')
-    }
-    return recognitionMedia(uploadId)
-  },
-  async getRecognitionEvaluationSummary(): Promise<RecognitionEvaluationSummary> {
-    const completed = recognitionUploads
-      .map((item) => item.job.result)
-      .filter((result): result is NonNullable<typeof result> => result !== null)
-      .filter((result) => result.absolute_error !== null)
-    const absoluteErrors = completed.map((result) => result.absolute_error ?? 0)
-    const relativeErrors = completed
-      .map((result) => result.relative_error)
-      .filter((value): value is number => value !== null)
-    return {
-      checked_materials: completed.length,
-      within_tolerance_count: completed.filter((result) => result.within_tolerance).length,
-      mean_absolute_error: absoluteErrors.reduce((sum, value) => sum + value, 0) / absoluteErrors.length,
-      median_absolute_error: absoluteErrors.sort((a, b) => a - b)[Math.floor(absoluteErrors.length / 2)],
-      max_absolute_error: Math.max(...absoluteErrors),
-      mean_relative_error: relativeErrors.reduce((sum, value) => sum + value, 0) / relativeErrors.length,
-    }
-  },
-  async uploadRecognition(_payload: {
-    file: File
-    sample_rate_fps: number
-    confidence_threshold: number
-    label?: string
-    reference_people_count?: number
-  }): Promise<RecognitionUpload> {
-    throw new Error('Загрузка доступна при подключённом backend')
-  },
-
-  async getSummary(): Promise<SummaryStats> {
-    const data = await loadData()
-    const rates = data.schedule.map(rateFor)
-    return {
-      groups: data.groups.length,
-      teachers: data.teachers.length,
-      disciplines: data.disciplines.length,
-      classrooms: data.classrooms.length,
-      cameras: data.cameras.length,
-      sessions_total: data.schedule.length,
-      sessions_today: scheduleForDate(data, new Date().toISOString().slice(0, 10)).length,
-      sessions_finished: data.schedule.length,
-      avg_attendance_rate: rates.length
-        ? Number((rates.reduce((sum, value) => sum + value, 0) / rates.length).toFixed(4))
-        : null,
-      records_complete: data.schedule.length,
-      records_partial: 0,
-      records_failed: 0,
-    }
-  },
-  async getGroupStats(id: number): Promise<EntityStats> {
-    const data = await loadData()
-    const group = assertFound(data.groups.find((item) => item.id === id), 'Группа не найдена')
-    const items = data.schedule.filter((item) => item.group.id === id)
-    const breakdown = new Map<number, { name: string; items: ScheduleItem[] }>()
-    for (const item of items) {
-      const row = breakdown.get(item.discipline.id) ?? { name: item.discipline.name, items: [] }
-      row.items.push(item)
-      breakdown.set(item.discipline.id, row)
-    }
-    return entityStats(items, group.id, group.name, breakdown)
-  },
-  async getTeacherStats(id: number): Promise<EntityStats> {
-    const data = await loadData()
-    const teacher = assertFound(data.teachers.find((item) => item.id === id), 'Преподаватель не найден')
-    const items = data.schedule.filter((item) => item.teacher?.id === id)
-    const breakdown = new Map<number, { name: string; items: ScheduleItem[] }>()
-    for (const item of items) {
-      const row = breakdown.get(item.group.id) ?? { name: item.group.name, items: [] }
-      row.items.push(item)
-      breakdown.set(item.group.id, row)
-    }
-    return entityStats(items, teacher.id, teacher.full_name, breakdown)
-  },
-  async getDisciplineStats(id: number): Promise<EntityStats> {
-    const data = await loadData()
-    const discipline = assertFound(data.disciplines.find((item) => item.id === id), 'Дисциплина не найдена')
-    const items = data.schedule.filter((item) => item.discipline.id === id)
-    const breakdown = new Map<number, { name: string; items: ScheduleItem[] }>()
-    for (const item of items) {
-      const row = breakdown.get(item.group.id) ?? { name: item.group.name, items: [] }
-      row.items.push(item)
-      breakdown.set(item.group.id, row)
-    }
-    return entityStats(items, discipline.id, discipline.name, breakdown)
-  },
-  async getGroupTimeline(id: number): Promise<GroupTimeline> {
-    const data = await loadData()
-    const group = assertFound(data.groups.find((item) => item.id === id), 'Группа не найдена')
-    const points = []
-    const start = new Date(`${data.semester_start}T12:00:00`)
-    for (let offset = 0; offset < 14; offset += 1) {
-      const date = new Date(start)
-      date.setDate(start.getDate() + offset)
-      const iso = date.toISOString().slice(0, 10)
-      const items = scheduleForDate(data, iso).filter((item) => item.group.id === id)
-      if (items.length === 0) continue
-      const rates = items.map(rateFor)
-      points.push({
-        date: iso,
-        avg_rate: Number((rates.reduce((sum, value) => sum + value, 0) / rates.length).toFixed(4)),
-        avg_detected: Number(
-          (
-            items.reduce((sum, item) => sum + countsFor(item, iso).average, 0) / items.length
-          ).toFixed(2),
-        ),
-        expected: group.students_count,
-      })
-    }
-    return { group_id: group.id, group_name: group.name, points }
-  },
+  async getGroups() { return clone(groups) },
+  async createGroup(payload: Omit<Group, 'id'>) { if (groups.some(g => g.name === payload.name)) throw new Error('Название уже занято'); const item = { ...payload, id: Math.max(...groups.map(g => g.id)) + 1 }; groups.push(item); return clone(item) },
+  async updateGroup(id: number, payload: Partial<Omit<Group, 'id' | 'name'>>) { Object.assign(find(groups, id), payload); return clone(find(groups, id)) },
+  async getTeachers() { return clone(teachers) },
+  async getDisciplines() { return clone(disciplines) },
+  async getClassrooms() { return clone(classrooms) },
+  async createClassroom(payload: { number: string; capacity: number | null }): Promise<Classroom> { const item: Classroom = { ...payload, id: Math.max(...classrooms.map(c => c.id)) + 1, aggregation_mode: 'single', cameras: [] }; classrooms.push(item); return clone(item) },
+  async updateClassroom(id: number, payload: { capacity?: number | null; aggregation_mode?: AggregationMode }) { Object.assign(find(classrooms, id), payload); return clone(find(classrooms, id)) },
+  async assignClassroomCameras(id: number, payload: { camera_id: number; role: CameraRole; priority: number; zone_code?: string | null }[]) { const room = find(classrooms, id); room.cameras = payload.map(p => ({ camera: { id: p.camera_id, name: find(cameras, p.camera_id).name }, role: p.role, priority: p.priority, zone_code: p.zone_code ?? null, enabled: true })); return clone(room) },
+  async getCameras() { return clone(cameras) },
+  async createCamera(payload: { name: string; rtsp_url: string; capture_group: string; enabled: boolean }) { const camera = { ...payload, id: Math.max(0, ...cameras.map(c => c.id)) + 1, classroom_number: null, created_at: `${DEMO_DATE}T09:00:00+03:00` }; cameras.push(camera); return clone(camera) },
+  async updateCamera(id: number, payload: Partial<{ name: string; rtsp_url: string; capture_group: string; enabled: boolean }>) { Object.assign(find(cameras, id), payload); return clone(find(cameras, id)) },
+  async deleteCamera(id: number) { find(cameras, id); cameras = cameras.filter(c => c.id !== id); classrooms.forEach(c => { c.cameras = c.cameras.filter(link => link.camera.id !== id) }) },
+  async getSchedule(params?: { group_id?: number; weekday?: number }) { return clone(schedule.filter(s => (!params?.group_id || s.group.id === params.group_id) && (!params?.weekday || s.weekday === params.weekday))) },
+  async importSchedule(_file: File): Promise<ImportResult> { throw new Error('Импорт доступен только в рабочем кабинете. Учебные данные не изменены.') },
+  async getWeekType(date: string): Promise<WeekTypeInfo> { return { date, week_type: 'white' } },
+  async getSessions(date: string): Promise<Session[]> { return scheduleOn(date).map(item => makeSession(item, date)) },
+  async getSession(id: number): Promise<SessionDetail> { const day = String(Math.floor(id / 100)); const date = `${day.slice(0, 4)}-${day.slice(4, 6)}-${day.slice(6, 8)}`; const item = find(scheduleOn(date), id % 100); return makeSession(item, date) },
+  async cancelSession(id: number): Promise<Session> { await staticApi.getSession(id); cancelled.add(id); return staticApi.getSession(id) },
+  async getCaptureMedia(_id: number): Promise<CaptureMedia> { return { video_url: null, annotated_url: null, video_unavailable_reason: 'Учебный пример не содержит записи занятия', annotated_unavailable_reason: 'Учебный пример не содержит записи занятия', expires_in_seconds: 0 } },
+  async getRecognitionUploads() { return clone(uploads) },
+  async getRecognitionUploadMedia(id: number): Promise<RecognitionUploadMedia> { find(uploads, id); const url = `${import.meta.env.BASE_URL}synthetic-classroom.png`; return { source_url: url, annotated_url: url, source_unavailable_reason: null, annotated_unavailable_reason: null, expires_in_seconds: 0 } },
+  async getRecognitionEvaluationSummary(): Promise<RecognitionEvaluationSummary> { return { checked_materials: 0, within_tolerance_count: 0, mean_absolute_error: null, median_absolute_error: null, max_absolute_error: null, mean_relative_error: null } },
+  async uploadRecognition(_payload: { file: File; sample_rate_fps: number; confidence_threshold: number; label?: string; reference_people_count?: number }): Promise<RecognitionUpload> { throw new Error('В учебном примере серверная загрузка отключена') },
+  async getSummary(): Promise<SummaryStats> { const sessions = history(); const stats = statsFor(sessions, 0, ''); return { groups: groups.length, teachers: teachers.length, disciplines: disciplines.length, classrooms: classrooms.length, cameras: cameras.length, sessions_total: sessions.length, sessions_today: scheduleOn(DEMO_DATE).length, sessions_finished: sessions.length, avg_attendance_rate: stats.avg_rate, records_complete: stats.records_complete, records_partial: stats.records_partial, records_failed: stats.records_failed } },
+  async getGroupStats(id: number) { return entity(id, 'group') },
+  async getTeacherStats(id: number) { return entity(id, 'teacher') },
+  async getDisciplineStats(id: number) { return entity(id, 'discipline') },
+  async getGroupTimeline(id: number): Promise<GroupTimeline> { const group = find(groups, id); return { group_id: id, group_name: group.name, points: Array.from({ length: 14 }, (_, i) => { const date = shiftDate(DEMO_DATE, i - 13); const stats = statsFor(history().filter(s => s.date === date && s.schedule.group.id === id), id, group.name); return { date, avg_rate: stats.avg_rate, avg_detected: stats.avg_detected, expected: group.students_count } }) } },
 }

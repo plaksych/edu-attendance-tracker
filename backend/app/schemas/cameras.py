@@ -28,7 +28,7 @@ class CameraCreate(CameraBase):
     rtsp_url: str = Field(
         min_length=1,
         max_length=1000,
-        description="RTSP/HTTP-адрес камеры или путь к видеофайлу для отладки",
+        description="RTSP-адрес с IP из разрешённой администратором подсети",
         examples=["rtsp://user:password@192.168.1.10:554/stream1"],
     )
 
@@ -61,8 +61,8 @@ class CameraRead(CameraBase):
 
     id: int
     rtsp_url: str = Field(
-        description="Адрес камеры с замаскированными учётными данными",
-        examples=["rtsp://user:***@192.168.1.10:554/stream1"],
+        description="Всегда пустая строка: адрес и учётные данные не выдаются API",
+        examples=[""],
     )
     classroom_number: str | None = Field(
         default=None,

@@ -1,0 +1,13 @@
+erDiagram
+  calendar_exceptions {
+    date day PK
+    bool teaching
+    int weekday "optional перенос"
+    string week_type "optional override"
+    string reason
+  }
+  login_attempts {
+    string key PK "hash account или peer"
+    int attempts
+    datetime window_start
+  }

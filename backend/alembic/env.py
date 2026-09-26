@@ -8,7 +8,7 @@ from app.core.database import Base
 from app import models  # noqa: F401  — регистрирует таблицы в metadata
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.sqlalchemy_url)
+config.set_main_option("sqlalchemy.url", settings.sqlalchemy_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

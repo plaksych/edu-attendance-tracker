@@ -1,0 +1,26 @@
+stateDiagram-v2
+  [*] --> pending
+  pending --> claimed: claim, token, attempts++
+  claimed --> recording: CAS владения
+  recording --> uploading: FFmpeg завершён
+  uploading --> completed: CAS + recognition job
+  claimed --> retry_wait: ошибка / lease expired
+  recording --> retry_wait: ошибка / timeout / lease expired
+  uploading --> retry_wait: S3 error / lease expired
+  retry_wait --> pending: maintenance, backoff окончен
+  claimed --> pending: release до записи при shutdown
+  pending --> failed: planned_at слишком старый / лимит попыток
+  retry_wait --> failed: лимит попыток
+  claimed --> failed: окончательная ошибка / лимит
+  recording --> failed: окончательная ошибка / лимит
+  uploading --> failed: окончательная ошибка / лимит
+  pending --> cancelled: отмена занятия
+  claimed --> cancelled: отмена занятия
+  recording --> cancelled: отмена занятия
+  uploading --> cancelled: отмена занятия
+  retry_wait --> cancelled: отмена занятия
+  note right of completed
+    Проверяются worker_id, claim_token, status, lease.
+    PUT имеет ключ попытки, старый владелец не публикует ссылку.
+    Профиль camera опционален.
+  end note

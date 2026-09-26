@@ -1,0 +1,5 @@
+# Two expired queue-ownership UUIDs from a disposable CI database, not API keys.
+# Kept only for historical diff scans; new evidence omits these internal fields.
+# Scope: exact commit, file, rule and line; no directory or rule exclusions.
+f885365cb412ed916f4efc85fa2718d0ea504d3c:scripts/ops/evidence/full-stack-20260925.json:generic-api-key:19
+f885365cb412ed916f4efc85fa2718d0ea504d3c:scripts/ops/evidence/full-stack-20260925.json:generic-api-key:57

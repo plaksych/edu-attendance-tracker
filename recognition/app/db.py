@@ -1,11 +1,14 @@
 """Очередь recognition_jobs в PostgreSQL: claim, heartbeat, фиксация результата."""
 
 import logging
+import random
+import uuid
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, TypeVar
 
 import psycopg2
 import psycopg2.extensions
+from psycopg2.extras import Json
 
 from app.config import settings
 
@@ -19,7 +22,7 @@ T = TypeVar("T")
 CLAIM_SQL = """
 WITH selected AS (
     SELECT id FROM recognition_jobs
-    WHERE status = 'pending'
+    WHERE status = 'pending' AND attempts < %s
     ORDER BY created_at, id
     FOR UPDATE SKIP LOCKED
     LIMIT 1
@@ -27,6 +30,7 @@ WITH selected AS (
 UPDATE recognition_jobs job
 SET status = 'processing',
     worker_id = %s,
+    claim_token = %s,
     lease_until = now() + make_interval(mins => %s),
     heartbeat_at = now(),
     attempts = attempts + 1,
@@ -35,7 +39,7 @@ SET status = 'processing',
 FROM selected
 WHERE job.id = selected.id
 RETURNING job.id, job.camera_capture_id, job.upload_id, job.sample_rate_fps,
-    job.confidence_threshold, job.attempts
+    job.confidence_threshold, job.attempts, job.claim_token
 """
 
 SOURCE_CONTEXT_SQL = """
@@ -62,7 +66,8 @@ UPDATE recognition_jobs
 SET heartbeat_at = now(),
     lease_until = now() + make_interval(mins => %s),
     updated_at = now()
-WHERE id = %s AND worker_id = %s AND status = 'processing'
+WHERE id = %s AND worker_id = %s AND claim_token = %s
+    AND status = 'processing' AND lease_until > clock_timestamp()
 """
 
 INSERT_RESULT_SQL = """
@@ -70,9 +75,9 @@ INSERT INTO recognition_results (
     recognition_job_id, people_count, detected_median, detected_percentile_75,
     detected_max, average_confidence, count_stddev, sampled_frames, source_frames,
     source_duration_ms, representative_frame_ms, absolute_error, relative_error,
-    within_tolerance, annotated_bucket, annotated_object_key, media_expires_at
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now() + make_interval(days => %s))
-ON CONFLICT (recognition_job_id) DO NOTHING
+    within_tolerance, annotated_bucket, annotated_object_key, media_expires_at,
+    inference_metadata
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now() + make_interval(days => %s), %s)
 """
 
 COMPLETE_JOB_SQL = """
@@ -82,7 +87,8 @@ SET status = 'completed',
     lease_until = NULL,
     error = NULL,
     updated_at = now()
-WHERE id = %s AND worker_id = %s AND status = 'processing'
+WHERE id = %s AND worker_id = %s AND claim_token = %s
+    AND status = 'processing' AND lease_until > clock_timestamp()
 """
 
 FAIL_JOB_SQL = """
@@ -92,7 +98,8 @@ SET status = 'failed',
     finished_at = now(),
     lease_until = NULL,
     updated_at = now()
-WHERE id = %s AND worker_id = %s AND status = 'processing'
+WHERE id = %s AND worker_id = %s AND claim_token = %s
+    AND status = 'processing' AND lease_until > clock_timestamp()
 """
 
 RETRY_JOB_SQL = """
@@ -100,7 +107,8 @@ UPDATE recognition_jobs
 SET status = 'retry_wait', error = %s,
     lease_until = now() + make_interval(secs => %s),
     updated_at = now()
-WHERE id = %s AND worker_id = %s AND status = 'processing'
+WHERE id = %s AND worker_id = %s AND claim_token = %s
+    AND status = 'processing' AND lease_until > clock_timestamp()
 """
 
 
@@ -112,6 +120,7 @@ class ClaimedJob:
     sample_rate_fps: float
     confidence_threshold: float
     attempts: int
+    claim_token: str
 
 
 @dataclass
@@ -145,7 +154,11 @@ class Database:
 
     def _connection(self) -> psycopg2.extensions.connection:
         if self._conn is None or self._conn.closed:
-            self._conn = psycopg2.connect(self._dsn)
+            self._conn = psycopg2.connect(
+                self._dsn,
+                connect_timeout=5,
+                options="-c statement_timeout=10000 -c lock_timeout=3000",
+            )
         return self._conn
 
     def _run(self, operation: Callable[[psycopg2.extensions.connection], T]) -> T:
@@ -160,10 +173,29 @@ class Database:
     def claim_job(self) -> ClaimedJob | None:
         """Забирает одно pending-задание, помечая его processing за этим воркером."""
 
+        token = str(uuid.uuid4())
+
         def operation(conn: psycopg2.extensions.connection) -> ClaimedJob | None:
             with conn, conn.cursor() as cur:
-                cur.execute(CLAIM_SQL, (settings.worker_id, settings.lease_minutes))
+                # Reconcile an unknown claim commit before attempting another claim.
+                cur.execute(
+                    """SELECT id, camera_capture_id, upload_id, sample_rate_fps,
+                    confidence_threshold, attempts, claim_token FROM recognition_jobs
+                    WHERE claim_token = %s AND worker_id = %s""",
+                    (token, settings.worker_id),
+                )
                 row = cur.fetchone()
+                if row is None:
+                    cur.execute(
+                        CLAIM_SQL,
+                        (
+                            settings.max_attempts,
+                            settings.worker_id,
+                            token,
+                            settings.lease_minutes,
+                        ),
+                    )
+                    row = cur.fetchone()
             if row is None:
                 return None
             return ClaimedJob(
@@ -173,6 +205,7 @@ class Database:
                 sample_rate_fps=float(row[3]),
                 confidence_threshold=float(row[4]),
                 attempts=row[5],
+                claim_token=row[6],
             )
 
         return self._run(operation)
@@ -201,28 +234,36 @@ class Database:
 
         return self._run(operation)
 
-    def heartbeat(self, job_id: int) -> bool:
+    def heartbeat(self, job_id: int, claim_token: str) -> bool:
         """Продлевает lease; False — задание больше не числится за этим воркером."""
 
         def operation(conn: psycopg2.extensions.connection) -> bool:
             with conn, conn.cursor() as cur:
                 cur.execute(
-                    HEARTBEAT_SQL, (settings.lease_minutes, job_id, settings.worker_id)
+                    HEARTBEAT_SQL,
+                    (settings.lease_minutes, job_id, settings.worker_id, claim_token),
                 )
                 return cur.rowcount == 1
 
         return self._run(operation)
 
-    def complete_job(self, job_id: int, result: "ProcessingResult") -> bool:
+    def complete_job(
+        self, job_id: int, claim_token: str, result: "ProcessingResult"
+    ) -> bool:
         """Сохраняет результат только пока задание принадлежит этому воркеру."""
 
         def operation(conn: psycopg2.extensions.connection) -> bool:
             with conn, conn.cursor() as cur:
-                cur.execute(
-                    COMPLETE_JOB_SQL, (job_id, settings.worker_id)
-                )
+                cur.execute(COMPLETE_JOB_SQL, (job_id, settings.worker_id, claim_token))
                 if cur.rowcount != 1:
-                    return False
+                    cur.execute(
+                        """SELECT 1 FROM recognition_jobs j
+                        JOIN recognition_results r ON r.recognition_job_id = j.id
+                        WHERE j.id = %s AND j.claim_token = %s AND j.status = 'completed'
+                          AND r.annotated_object_key = %s""",
+                        (job_id, claim_token, result.annotated_object_key),
+                    )
+                    return cur.fetchone() is not None
                 cur.execute(
                     INSERT_RESULT_SQL,
                     (
@@ -243,6 +284,7 @@ class Database:
                         result.annotated_bucket,
                         result.annotated_object_key,
                         settings.annotated_retention_days,
+                        Json(result.inference_metadata),
                     ),
                 )
                 return True
@@ -250,7 +292,12 @@ class Database:
         return self._run(operation)
 
     def fail_job(
-        self, job_id: int, attempts: int, error: str, permanent: bool = False
+        self,
+        job_id: int,
+        claim_token: str,
+        attempts: int,
+        error: str,
+        permanent: bool = False,
     ) -> bool:
         """Переводит задание в failed либо в retry_wait, если попытки не исчерпаны."""
         error = error[:2000]
@@ -259,11 +306,19 @@ class Database:
         def operation(conn: psycopg2.extensions.connection) -> bool:
             with conn, conn.cursor() as cur:
                 if final:
-                    cur.execute(FAIL_JOB_SQL, (error, job_id, settings.worker_id))
+                    cur.execute(
+                        FAIL_JOB_SQL, (error, job_id, settings.worker_id, claim_token)
+                    )
                 else:
                     cur.execute(
                         RETRY_JOB_SQL,
-                        (error, settings.retry_delay_seconds, job_id, settings.worker_id),
+                        (
+                            error,
+                            retry_delay(attempts),
+                            job_id,
+                            settings.worker_id,
+                            claim_token,
+                        ),
                     )
                 return cur.rowcount == 1
 
@@ -282,3 +337,11 @@ class Database:
                 error,
             )
         return True
+
+
+def retry_delay(attempts: int) -> float:
+    ceiling = min(
+        settings.retry_max_delay_seconds,
+        settings.retry_delay_seconds * 2 ** min(max(attempts - 1, 0), 16),
+    )
+    return random.uniform(ceiling / 2, ceiling)

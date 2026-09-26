@@ -1,0 +1,20 @@
+flowchart TB
+  browser["Браузер"] -->|"HTTPS; app host / media host"| gateway["Gateway: TLS; bind по умолчанию 127.0.0.1:8443"]
+  subgraph private["Compose private: internal network"]
+    front["Frontend Nginx"] --> api["Backend API"]
+    api --> db[("PostgreSQL / pgdata")]
+    api --> s3[("MinIO / miniodata")]
+    workers["Scheduler / maintenance / recognition"] --> db
+    workers --> s3
+    ops["migrate / storage-init: профиль ops"] --> db
+    ops --> s3
+    cap["Capture: профиль camera"] --> db
+    cap --> s3
+  end
+  gateway -->|"app"| front
+  gateway -->|"media: signed GET"| s3
+  cameras["Разрешённая сеть камер"] -.-> cap
+  secrets["TLS-файлы, scoped DSN / S3 credentials, проверенные image digests"] --> gateway
+  backup["Оператор: согласованный backup БД + объектов вне сервера"] -.-> db
+  backup -.-> s3
+  note["Схема конфигурации, не свидетельство deployment / restore. Dev override публикует только loopback-порты."]

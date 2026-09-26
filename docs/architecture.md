@@ -1,186 +1,130 @@
 # Архитектура
 
-Система разделена на четыре независимых роли: интерфейс, backend с планировщиком,
-запись видеопотока и обработка роликов. PostgreSQL хранит предметные данные и
-координирует очереди, MinIO хранит медиафайлы.
+Один вуз на развёртывание: React + TypeScript + Vite, FastAPI + SQLAlchemy,
+PostgreSQL и S3. Основной серверный сценарий начинается с загрузки файла.
+Камеры подключаются отдельно профилем `camera`. Подсчёт людей не устанавливает
+личности и не доказывает присутствие конкретного студента.
 
-[К оглавлению](../README.md) · [Модель данных](data-model.md) · [Эксплуатация](operations.md) · [API](api.md)
+[README](../README.md) · [API](api.md) · [Данные](data-model.md) · [Безопасность](security.md)
 
-## Карта компонентов
+## Компоненты
 
-```mermaid
-flowchart LR
-    User["Пользователь"] -->|"HTTPS"| Web["Frontend\nReact + TypeScript"]
-    Web -->|"REST /api/v1"| Backend
+![D02: отдельные процессы API, scheduler, maintenance и workers](diagrams/rendered/D02.svg)
 
-    subgraph App["Контур приложений"]
-        Backend["Backend\nFastAPI :8000"]
-        Scheduler["Measurement Scheduler\nинтервал 30 с"]
-        Capture["Capture manager\nFFmpeg"]
-        Recognition["Recognition worker\nYOLO"]
-    end
+| Компонент | Ответственность и точка входа |
+| --- | --- |
+| Frontend | React-роуты, формы, cookie/CSRF клиент, статический адаптер; `frontend/src/App.tsx` |
+| Backend API | Доступ, валидация, предметные операции, presigned URL; `backend/app/main.py` |
+| Scheduler | Горизонт занятий, замеры, camera jobs, агрегация; `python -m app.scheduler` из `backend/` |
+| Maintenance | Lease recovery, timeout ожидающих capture, ограниченный orphan GC; `python -m app.maintenance` |
+| Recognition | Claim, дочерний процесс inference с лимитами, публикация; `recognition/app/main.py` |
+| Capture | Claim batch по `CAPTURE_GROUP`, FFmpeg и S3; `capture/app/main.py` |
+| PostgreSQL | Предметные записи, сессии, аудит, очередь; не медиа |
+| S3 / MinIO | Private bucket, исходники и размеченные кадры, lifecycle |
+| Migrate / storage-init | Явные одноразовые `ops`-процессы; runtime не создаёт бакет и lifecycle |
 
-    Backend --- Scheduler
-    Scheduler -->|"занятия, замеры, задания"| DB[("PostgreSQL 16")]
-    Backend <-->|"справочники, занятия, статистика"| DB
+В lifespan API нет scheduler. Scheduler и maintenance используют разные
+session-level advisory locks `739401` и `739402`. Блокировка и рабочий SQL
+идут через одно выделенное физическое соединение с `NullPool`. При его потере
+лидерство получают заново. Это не полноценная HA-конфигурация.
 
-    Files["Видео и изображения"] -->|"POST /recognition/uploads"| Backend
-    Backend -->|"upload + recognition job"| DB
-    Backend -->|"исходный файл"| Storage
+Upload-only требует maintenance: без него `retry_wait` и потерянные lease
+не возвращаются в работу. Scheduler нужен для расписания и агрегации;
+отсутствие capture-процесса не останавливает самостоятельные upload jobs.
 
-    Cameras["IP-камеры"] -->|"RTSP"| Capture
-    Capture <-->|"claim, lease, status"| DB
-    Capture -->|"original.mp4"| Storage[("MinIO")]
+## Путь Загрузки
 
-    Recognition <-->|"claim, heartbeat, result"| DB
-    Recognition -->|"GET original.mp4"| Storage
-    Recognition -->|"PUT annotated.jpg"| Storage
+![D06: валидация, S3, очередь, inference и защищённая фиксация](diagrams/rendered/D06.svg)
 
-    Backend -->|"presigned URL"| Storage
-    Web -->|"временная ссылка"| Storage
-```
+API проверяет доступ, файл и идентичность запроса, сохраняет объект, затем одной
+SQL-транзакцией создаёт upload, job и привязку idempotency key. `202` означает
+принятие задания, не успешный inference. Распределённой транзакции S3/PostgreSQL
+нет: после неопределённого SQL commit объект не удаляется немедленно, поскольку
+ссылка могла уже зафиксироваться.
 
-### Границы ответственности
+Recognition загружает исходник, проверяет локальные веса и запускает обработку
+с лимитами. Артефакт попытки сохраняется до SQL commit; условное завершение job
+и INSERT результата выполняются одной транзакцией. Потерявший lease worker
+не может опубликовать результат, даже если вычисление уже закончено.
 
-| Компонент | Ответственность | Масштабирование |
-| --- | --- | --- |
-| `frontend` | визуализация, формы и запросы к REST | статическая сборка или один Nginx-контейнер |
-| `backend` | API, импорт, scheduler, агрегация, выдача временных ссылок | обычно один экземпляр scheduler; API можно отделить при дальнейшем развитии |
-| `capture-manager` | запись RTSP, загрузка исходного ролика | по сетевым зонам камер через `CAPTURE_GROUP` |
-| `recognition-worker` | обработка загруженных файлов и роликов камер, загрузка размеченного кадра | независимое горизонтальное масштабирование |
-| PostgreSQL | данные вуза, состояния заданий, lease и результаты | резервное копирование обязательно |
-| MinIO | исходные ролики и размеченные кадры | жизненный цикл объектов и резервное копирование |
+## Гарантии Очереди
 
-## Поток одного занятия
+![D10: heartbeat, повтор и защита завершения recognition](diagrams/rendered/D10.svg)
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant S as Scheduler
-    participant DB as PostgreSQL
-    participant C as Capture manager
-    participant M as MinIO
-    participant R as Recognition worker
-    participant B as Backend
-    participant F as Frontend
+Claim использует `FOR UPDATE SKIP LOCKED`; новая попытка получает `claim_token`,
+`worker_id`, увеличенный `attempts` и `lease_until`. Heartbeat, fail и complete
+сверяют token, владельца, состояние и действующий lease по часам БД.
+Повторное вычисление возможно, включая одновременную работу старого worker после
+истечения lease. Гарантия касается публикации, не «exactly-once inference».
+На job допускается один SQL-результат.
 
-    S->>DB: Создать session на горизонте 14 дней
-    S->>DB: Создать два measurement и camera_capture
-    C->>DB: Атомарно claim ближайших camera_capture
-    C->>C: Записать RTSP в MP4
-    C->>M: Загрузить original.mp4
-    C->>DB: Завершить capture и создать recognition_job
-    R->>DB: Claim recognition_job и продлевать heartbeat
-    R->>M: Скачать original.mp4
-    R->>R: Подсчитать людей на кадрах
-    R->>M: Загрузить annotated.jpg
-    R->>DB: Сохранить recognition_result
-    S->>DB: Агрегировать камеры и два замера
-    F->>B: Запросить занятие и статистику
-    B->>DB: Получить предметные данные
-    B->>M: Подписать временные ссылки
-    B-->>F: Занятие, результат и ссылки на медиа
-```
+Maintenance переводит просроченную попытку в `retry_wait`, очищает владение,
+назначает задержку, затем возвращает в `pending`. Исчерпанные попытки становятся
+`failed`. Recognition default: 3 попытки, lease 5 минут, heartbeat 20 секунд.
+Параметры сверяют между backend и workers.
 
-## Поток загруженного файла
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant U as Пользователь
-    participant B as Backend API
-    participant M as MinIO
-    participant DB as PostgreSQL
-    participant R as Recognition worker
-
-    U->>B: POST /recognition/uploads с видео или изображением
-    B->>B: Проверить расширение, Content-Type и размер
-    B->>M: Сохранить исходный файл
-    B->>DB: Создать recognition_upload и recognition_job
-    B-->>U: 202 Accepted и идентификатор задания
-    R->>DB: Claim job и продление lease
-    R->>M: Скачать исходный файл
-    R->>R: Обработать один кадр или выборку кадров
-    R->>M: Сохранить annotated.jpg
-    R->>DB: Сохранить метрики и статус completed
-    U->>B: GET /recognition/uploads/{id}
-    B-->>U: Статус, число людей, метрики
-```
-
-Подробности работы с этим сценарием приведены в разделе
-[«Распознавание»](recognition.md).
-
-## Как формируется посещаемость
-
-1. Scheduler создаёт `session` из недельного расписания.
-2. Для занятия создаются два `measurement`: через 15 минут после начала и за
-   15 минут до конца. Смещение настраивается через `MEASUREMENT_OFFSET_MINUTES`.
-3. На каждый активный источник аудитории создаётся `camera_capture`.
-4. После успешной записи создаётся один `recognition_job`.
-5. Результаты камер объединяются в итог замера согласно `aggregation_mode` аудитории.
-6. Два завершённых замера образуют `attendance_record`. Если доступен только
-   один замер, результат сохраняется со статусом `partial`.
-
-## Режимы объединения камер
-
-| Режим | Когда применять | Итог замера |
-| --- | --- | --- |
-| `single` | одна камера | результат камеры с наивысшим приоритетом |
-| `maximum` | зоны камер пересекаются | максимум значений по камерам |
-| `sum` | зоны не пересекаются | сумма значений по камерам |
-| `primary_backup` | основная камера с резервной | основная; резервная при низкой уверенности или отсутствии основной |
-
-Не используйте `sum`, если одна и та же зона попадает в несколько камер: это
-приведёт к двойному учёту людей.
-
-## Состояния очередей
-
-### Запись с камеры
-
-```mermaid
-stateDiagram-v2
-    [*] --> pending
-    pending --> claimed: capture-manager забрал задание
-    claimed --> recording: начата запись
-    recording --> uploading: ролик готов
-    uploading --> completed: MP4 в MinIO
-    claimed --> pending: штатная остановка до записи
-    claimed --> retry_wait: ошибка
-    recording --> retry_wait: ошибка
-    uploading --> retry_wait: ошибка
-    retry_wait --> pending: пауза закончилась
-    claimed --> failed: lease истёк, попытки исчерпаны
-    recording --> failed: lease истёк, попытки исчерпаны
-    uploading --> failed: lease истёк, попытки исчерпаны
-```
-
-### Распознавание
-
-```mermaid
-stateDiagram-v2
-    [*] --> pending
-    pending --> processing: worker забрал job
-    processing --> completed: результат сохранён
-    processing --> retry_wait: ошибка обработки
-    retry_wait --> pending: пауза закончилась
-    processing --> pending: lease истёк, повтор разрешён
-    processing --> failed: попытки исчерпаны
-```
-
-Для захвата заданий используются `FOR UPDATE SKIP LOCKED`, `worker_id` и
-`lease_until`. Это исключает одновременную обработку одного задания двумя
-воркерами и возвращает работу в очередь после сбоя процесса.
-
-## Хранение медиа
+Ключи не переиспользуются между попытками:
 
 ```text
-original/sessions/{session_id}/measurements/{measurement_id}/cameras/{camera_id}.mp4
-annotated/sessions/{session_id}/measurements/{measurement_id}/cameras/{camera_id}.jpg
-original/uploads/{random_key}.{ext}
-annotated/uploads/{upload_id}.jpg
+original/uploads/{uuid}.{ext}
+original/captures/{capture_id}/attempts/{attempt}/{claim_token}.mp4
+annotated/jobs/{job_id}/attempts/{attempt}/{claim_token}.jpg
 ```
 
-Backend не раскрывает постоянные ссылки на бакет. Он выдаёт временные
-presigned URL. По умолчанию исходный ролик хранится 30 дней, размеченный кадр
-90 дней; значения настраиваются переменными окружения и lifecycle-политикой
-бакета.
+GC проверяет известные attempt-префиксы, возраст более суток, ссылки результата
+и активный claim. Это не сборщик всех S3 orphan: upload после неудачного commit
+покрывается retention, а не этим GC. Ограничение обхода GC требует проверки на
+объёме целевого стенда.
+
+## Занятие И Агрегация
+
+![D07: два замера, камерная агрегация и отдельная связь upload](diagrams/rendered/D07.svg)
+
+Scheduler создаёт занятия на 14 дней вперёд, замеры через 15 минут после начала
+и за 15 минут до конца. Default timezone `Europe/Moscow`; `SEMESTER_START`
+задаёт чередование недели. Production требует SEMESTER_END; занятия вне границ
+семестра не создаются. CalendarException задаёт выходной либо перенос weekday/week_type.
+Session фиксирует expected count и режим агрегации; capture фиксирует role,
+priority и zone_code. Агрегация использует эти snapshots, не изменившиеся связи.
+
+| Режим | Формула |
+| --- | --- |
+| `single` | Первый успешный результат по приоритету камеры |
+| `maximum` | Максимум успешных результатов перекрывающихся зон |
+| `sum` | Сумма; API и агрегация требуют разные непустые зоны, геометрия не проверяется |
+| `primary_backup` | Primary; резерв при отсутствии primary или confidence ниже 0.3 |
+
+Неполный набор камер даёт `partially_completed` замер. Завершённое занятие получает
+`complete` при двух значениях, `partial` при одном, `failed` при отсутствии.
+Ноль является измерением, NULL им не является. Rate не ограничивается 100%;
+неизвестный/нулевой expected даёт NULL. Сводная rate взвешена по expected count.
+
+Upload может иметь session_id/measurement_id. Один upload на measurement без
+capture становится источником замера: scheduler переносит результат завершённой
+job в открытый замер, затем формирует attendance. Связь только session_id этого
+не делает. Уже терминальные замеры и существующие attendance не пересчитываются
+автоматически после retry; corrections не переписывают raw result. Финализация
+записывает точные ссылки measurement_result_sources и used_for_count. Для legacy
+без надёжного происхождения сохраняется явный статус unknown.
+
+Для finished session замер без captures и upload получает срок последнего входа:
+finished_at (либо конец расписания) + MEASUREMENT_INPUT_GRACE_SECONDS, default 3600.
+После срока scheduler закрывает его как failed/missing_input_deadline с NULL count
+и source_reference_status=missing_input. Активная job этим сроком не обрывается.
+
+Отмена session блокирует строку занятия, отменяет незавершённые замеры, captures
+и связанные upload/capture jobs, очищает claim_token/lease/worker_id. Новые upload
+и retry для отменённого занятия отклоняются; готовые raw results сохраняются.
+
+## Развёртывание
+
+![D03: закрытая сеть Compose, TLS gateway и опциональная сеть камер](diagrams/rendered/D03.svg)
+
+Compose описывает закрытые сервисы, volumes и TLS gateway. Конфигурация не
+доказывает deployment, корректный IAM, restore или готовность весов.
+Порядок допуска ведётся в [эксплуатации](operations.md).
+SQLite не проверяет SKIP LOCKED, advisory lock, конкурирующий CAS и сетевые сбои.
+
+Решения: [очередь](adr/001-postgresql-queue.md), [процессы](adr/002-scheduler-maintenance.md),
+[доступ](adr/003-server-sessions.md), [демо](adr/004-demo-isolation.md),
+[история upload](adr/005-upload-history.md). Все [схемы](diagrams/README.md).

@@ -1,0 +1,12 @@
+flowchart TB
+  file["Файл пользователя на устройстве"] --> decode["Frontend: декодирование кадра; предел размера"]
+  decode -->|"transfer ImageBitmap"| worker["Web Worker: OffscreenCanvas; letterbox 640"]
+  origin["Origin сайта: ORT runtime + WASM + ONNX"] -->|"GET; проверка версии, размера и SHA256"| worker
+  worker --> tensor["RGB / float32 / NCHW; input images"]
+  tensor --> inference["ONNX Runtime WASM; один поток"]
+  inference --> nms["output0; person class; threshold; NMS; обратные координаты"]
+  nms --> result["Рамки, число, provenance browser_inference, параметры"]
+  result --> ui["Frontend: результат на локальном кадре"]
+  cancel["Отмена / timeout 120 s / ошибка"] --> terminate["terminate Worker; reject pending; освободить heap"]
+  nms --> cleanup["close bitmap; dispose tensors; очистить canvas"]
+  note["Нет стрелки загрузки пользовательского медиа на сервер. Ошибка модели не заменяется fixture."]

@@ -5,7 +5,8 @@ export function isoDate(date: Date): string {
 }
 
 export function today(): string {
-  return isoDate(new Date())
+  if (import.meta.env.VITE_STATIC_DATA === 'true') return DEMO_DATE
+  return new Intl.DateTimeFormat('en-CA', { timeZone: TIME_ZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 }
 
 export function shiftDate(iso: string, days: number): string {
@@ -35,6 +36,7 @@ export function fmtDateShort(iso: string): string {
 
 export function fmtClock(isoDateTime: string): string {
   return new Date(isoDateTime).toLocaleTimeString('ru-RU', {
+    timeZone: TIME_ZONE,
     hour: '2-digit',
     minute: '2-digit',
   })
@@ -45,3 +47,5 @@ export function fmtBytes(bytes: number | null): string {
   if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} КБ`
   return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`
 }
+export const DEMO_DATE = '2026-09-23'
+export const TIME_ZONE = import.meta.env.VITE_TIME_ZONE || 'Europe/Moscow'

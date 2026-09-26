@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 1,
+  "id": "yolov8n-coco-browser",
+  "provenance": "browser_inference",
+  "artifact": {
+    "path": "yolov8n.onnx",
+    "bytes": 12756454,
+    "sha256": "353ca4ab4fa9d4e5499d3300912faa30dae49718f90be8a159ff6af09a4e66b7",
+    "verification": "SHA-256 checked in worker before creating a session",
+    "externalData": false
+  },
+  "source": {
+    "repositoryCommit": "53a886c2980a6c69ca33edb65a03f0ac99ede889",
+    "embeddedDescription": "Ultralytics YOLOv8n model trained on coco.yaml",
+    "embeddedAuthor": "Ultralytics",
+    "embeddedVersion": "8.3.132",
+    "embeddedExportDate": "2026-07-17T14:04:33.088988",
+    "originalDownloadUrl": null,
+    "caveat": "Original weights/download and export chain were not independently verified. Hash pins the existing repository artifact, not its authenticity."
+  },
+  "license": {
+    "embeddedModelLicense": "AGPL-3.0",
+    "runtimeHeaderLicense": "MIT",
+    "releaseBlocker": "Owner must verify weights/export provenance and redistribution obligations before public release. No commercial terms accepted."
+  },
+  "runtime": {
+    "name": "onnxruntime-web",
+    "version": "1.22.0",
+    "provider": "wasm",
+    "numThreads": 1,
+    "execution": "dedicated classic worker with lazy vendored UMD loader",
+    "assets": {
+      "ort/ort.min.js": "924e4fcdfdf69acccff3d024d6e1ad3f41ca858d27fc4dd59fc4927dd933e7db",
+      "ort/ort-wasm-simd-threaded.jsep.mjs": "1cbcba8f2c769c1eecbab66a1b1e55ef11704515bf4306373e3db3c37cf6dcd8",
+      "ort/ort-wasm-simd-threaded.jsep.wasm": "b45970d0632383a057c27ca5b660b216f8e00c17cf8db9f6207b5e4abc839368",
+      "ort/ort-wasm-simd-threaded.mjs": "30dd851d9c00622940500f71ddd2ff8820c5cb65270816080175b958705385a8",
+      "ort/ort-wasm-simd-threaded.wasm": "71aef04959c5c1b6de461b6538e2058e306610034a85aad2742d0c7fd4533fe4"
+    }
+  },
+  "graph": {
+    "irVersion": 10,
+    "opset": 18,
+    "caveat": "Embedded export args claim opset 17; graph inspection confirms opset 18.",
+    "input": { "name": "images", "type": "float32", "shape": [1, 3, 640, 640] },
+    "output": { "name": "output0", "type": "float32", "shape": [1, 84, 8400], "supportedTranspose": [1, 8400, 84] },
+    "classes": { "dataset": "COCO", "count": 80, "selectedClass": "person", "selectedClassId": 0, "scoreChannel": 4 },
+    "preprocessing": "RGB / 255, NCHW; resize preserving aspect ratio with rounded dimensions; centered letterbox RGB 114; inverse uses actual horizontal and vertical resize scales",
+    "postprocessing": { "confidenceDefault": 0.35, "confidenceRange": [0.1, 0.9], "probabilityRoundoffTolerance": 0.000001, "probabilityHandling": "Accept bounded float32 sigmoid roundoff, clamp selected class score to [0,1]; reject larger excursions", "nmsIou": 0.45, "coordinates": "xywh center in input pixels; clip to source bounds; reject nonfinite/unsupported output; person-only greedy NMS" }
+  },
+  "videoSampling": { "mode": "current decoded frame, not unique-person tracking", "delayAfterInferenceMs": 900, "statisticsWindowFrames": 60 },
+  "limits": { "imageBytes": 20971520, "videoBytes": 209715200, "pixels": 16000000, "maxDimension": 8192, "videoSeconds": 600, "operationTimeoutMs": 120000, "decodeTimeoutMs": 20000 },
+  "unusedArtifact": { "path": "yolov8n.onnx.data", "sha256": "d1aff07cf76ce014236721fd4353335b867ec9bd5ed72afa954ea2fb596a318a", "reason": "Graph has no external initializers. Not fetched by browser inference." },
+  "quality": {
+    "classroomAccuracy": "not_evaluated",
+    "confidenceIsAccuracy": false,
+    "realInferenceSmoke": {
+      "status": "passed",
+      "date": "2026-09-23",
+      "input": "Generated 320x240 geometric canvas; no private media",
+      "evidence": "frontend/tests/browserRecognition-smoke.json",
+      "scope": "Production-subpath dedicated worker, actual pinned ONNX/WASM, real inference, cancellation/retry, no-upload network trace",
+      "limitation": "Execution smoke only; no people/classroom accuracy, video, cross-browser or production CSP validation"
+    }
+  }
+}

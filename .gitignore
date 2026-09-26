@@ -246,10 +246,15 @@ media/
 *.xlsx
 *.pdf
 *.mp4
+!docs/overview/project-overview-ru.mp4
 *.mov
 *.zip
 output/
-docs/
+docs/report-assets/
+docs/recognition-architecture-summary.md
+docs/50-camera-batch-architecture.md
+docs/db-roles.sql
+recognition/PRODUCTION.md
 tmp/
 
 # Локальные таблицы и выгрузки
@@ -260,3 +265,9 @@ tmp/
 
 # Системные файлы
 .DS_Store
+*.docx
+artifacts/
+frontend/test-results/
+frontend/playwright-report/
+.env.*
+!.env.example
