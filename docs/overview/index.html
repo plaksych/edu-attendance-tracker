@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Обзор · edu-attendance-tracker</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f6f8fa;color:#1f2328;font:16px/1.6 system-ui,sans-serif}main{max-width:1180px;margin:auto;padding:32px 24px}header{display:flex;align-items:center;justify-content:space-between;gap:24px;border-bottom:1px solid #d0d7de;padding-bottom:20px;margin-bottom:26px}a{color:#0969da}h1{font-size:28px;line-height:1.25;margin:0}p{color:#59636e}video{display:block;width:100%;aspect-ratio:16/9;background:#fff;border:1px solid #d0d7de;border-radius:6px}nav{display:flex;flex-wrap:wrap;gap:10px 22px;margin-top:24px}button{font:inherit;color:#0969da;border:0;border-bottom:1px solid #d0d7de;background:transparent;cursor:pointer;padding:5px 0}button:hover{border-color:#0969da}button:focus-visible{outline:2px solid #0969da;outline-offset:4px}@media(max-width:600px){main{padding:18px 14px}header{display:block}header a{display:inline-block;margin-top:12px}h1{font-size:23px}}
+</style>
+<main><header><h1>Посещаемость учебных занятий</h1><a href="https://github.com/plaksych/edu-attendance-tracker/tree/production">Репозиторий</a></header>
+<video controls playsinline preload="metadata" poster="poster.jpg" aria-label="Обзор проекта на русском языке"><source src="project-overview-ru.mp4" type="video/mp4"><track kind="captions" srclang="ru" label="Русский" src="captions.ru.vtt"></video>
+<nav aria-label="Главы"><button data-time="0">00:00 Проект</button><button data-time="8">00:08 Исходные данные</button><button data-time="20">00:20 Путь файла</button><button data-time="34">00:34 Распознавание</button><button data-time="48">00:48 Отчёты</button><button data-time="60">01:00 Режимы</button><button data-time="72">01:12 Код</button><button data-time="82">01:22 Документация</button></nav>
+<p>1 минута 28 секунд. Русские титры, без звука. Экраны приложения сняты на синтетических учебных данных. Серверный поток показан схемой, а не записью работающего стенда.</p>
+</main><script>
+const video = document.querySelector('video');
+let requestedTime = null;
+function playChapter() {
+  if (requestedTime === null || video.readyState < 1) return;
+  video.currentTime = requestedTime;
+  requestedTime = null;
+  video.play().catch(() => {});
+}
+video.addEventListener('loadedmetadata', playChapter);
+document.querySelectorAll('[data-time]').forEach(button => button.addEventListener('click', () => {
+  requestedTime = Number(button.dataset.time);
+  if (video.readyState >= 1) playChapter();
+  else { video.preload = 'auto'; video.load(); }
+}));
+</script>
+</html>

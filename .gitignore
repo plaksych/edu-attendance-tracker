@@ -246,6 +246,7 @@ media/
 *.xlsx
 *.pdf
 *.mp4
+!docs/overview/project-overview-ru.mp4
 *.mov
 *.zip
 output/
