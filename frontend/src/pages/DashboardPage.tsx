@@ -28,8 +28,11 @@ export function DashboardPage() {
   const [groups, setGroups] = useState<Group[]>([])
   const [teachers, setTeachers] = useState<Teacher[]>([])
   const [disciplines, setDisciplines] = useState<Discipline[]>([])
-  const [dimension, setDimension] = useState<Dimension>('groups')
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selection, setSelection] = useState<{ dimension: Dimension; id: number | null }>({
+    dimension: 'groups',
+    id: null,
+  })
+  const { dimension } = selection
   const [stats, setStats] = useState<EntityStats | null>(null)
   const [timeline, setTimeline] = useState<GroupTimeline | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -51,27 +54,29 @@ export function DashboardPage() {
     return disciplines.map((d) => ({ id: d.id, name: d.name }))
   }, [dimension, groups, teachers, disciplines])
 
-  useEffect(() => {
-    setSelectedId(options.length > 0 ? options[0].id : null)
-  }, [options])
+  const selectedId = selection.id ?? options[0]?.id ?? null
 
   useEffect(() => {
-    if (selectedId === null) return
+    let active = true
     setStats(null)
     setTimeline(null)
+    if (selectedId === null) return
     const loadStats =
       dimension === 'groups'
         ? api.getGroupStats(selectedId)
         : dimension === 'teachers'
           ? api.getTeacherStats(selectedId)
           : api.getDisciplineStats(selectedId)
-    loadStats.then(setStats).catch((e: Error) => setError(e.message))
+    loadStats
+      .then((data) => { if (active) setStats(data) })
+      .catch((e: Error) => { if (active) setError(e.message) })
     if (dimension === 'groups') {
       api
         .getGroupTimeline(selectedId)
-        .then(setTimeline)
-        .catch(() => setTimeline(null))
+        .then((data) => { if (active) setTimeline(data) })
+        .catch(() => { if (active) setTimeline(null) })
     }
+    return () => { active = false }
   }, [dimension, selectedId])
 
   if (error) return <div className="alert alert--error">Ошибка загрузки: {error}</div>
@@ -137,7 +142,9 @@ export function DashboardPage() {
               <button
                 key={d.key}
                 className={dimension === d.key ? 'active' : ''}
-                onClick={() => setDimension(d.key)}
+                onClick={() => {
+                  if (d.key !== dimension) setSelection({ dimension: d.key, id: null })
+                }}
               >
                 {d.label}
               </button>
@@ -146,7 +153,7 @@ export function DashboardPage() {
           <select
             className="select"
             value={selectedId ?? ''}
-            onChange={(e) => setSelectedId(Number(e.target.value))}
+            onChange={(e) => setSelection({ dimension, id: Number(e.target.value) })}
           >
             {options.map((option) => (
               <option key={option.id} value={option.id}>
