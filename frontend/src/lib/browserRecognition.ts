@@ -46,10 +46,23 @@ const INPUT_SIZE = 640
 const PERSON_CLASS_INDEX = 4
 const NMS_IOU_THRESHOLD = 0.45
 
-let recognizerPromise: Promise<BrowserRecognizer> | null = null
+const MODELS = {
+  coco: { filename: 'yolov8n.onnx', outputChannels: 84, paddingColor: '#000000' },
+  classroom: { filename: 'yolov8n-classroom.onnx', outputChannels: 5, paddingColor: '#727272' },
+} as const
+
+export type BrowserRecognitionModel = keyof typeof MODELS
+
+type ModelConfig = (typeof MODELS)[BrowserRecognitionModel]
+
+const recognizerPromises = new Map<BrowserRecognitionModel, Promise<BrowserRecognizer>>()
 
 export class BrowserRecognizer {
-  constructor(private readonly runtime: RuntimeApi, private readonly session: RuntimeSession) {}
+  constructor(
+    private readonly runtime: RuntimeApi,
+    private readonly session: RuntimeSession,
+    private readonly model: ModelConfig,
+  ) {}
 
   async detect(
     source: CanvasImageSource,
@@ -62,7 +75,7 @@ export class BrowserRecognizer {
     }
 
     const startedAt = performance.now()
-    const { input, scale, paddingX, paddingY } = createInput(source, sourceWidth, sourceHeight)
+    const { input, scale, paddingX, paddingY } = createInput(source, sourceWidth, sourceHeight, this.model.paddingColor)
     const inputName = this.session.inputNames[0]
     if (!inputName) throw new Error('У модели не определён входной тензор')
 
@@ -75,6 +88,7 @@ export class BrowserRecognizer {
 
     const boxes = decodePeople(
       output,
+      this.model.outputChannels,
       confidenceThreshold,
       sourceWidth,
       sourceHeight,
@@ -93,12 +107,19 @@ export class BrowserRecognizer {
   }
 }
 
-export function getBrowserRecognizer(): Promise<BrowserRecognizer> {
-  if (!recognizerPromise) recognizerPromise = createRecognizer()
-  return recognizerPromise
+export function getBrowserRecognizer(model: BrowserRecognitionModel = 'coco'): Promise<BrowserRecognizer> {
+  const cached = recognizerPromises.get(model)
+  if (cached) return cached
+
+  const recognizer = createRecognizer(MODELS[model]).catch((error: unknown) => {
+    recognizerPromises.delete(model)
+    throw error
+  })
+  recognizerPromises.set(model, recognizer)
+  return recognizer
 }
 
-async function createRecognizer(): Promise<BrowserRecognizer> {
+async function createRecognizer(model: ModelConfig): Promise<BrowserRecognizer> {
   const runtime = window.ort
   if (!runtime) {
     throw new Error('Средство локального распознавания не загрузилось. Обновите страницу.')
@@ -106,16 +127,21 @@ async function createRecognizer(): Promise<BrowserRecognizer> {
   runtime.env.wasm.wasmPaths = `${import.meta.env.BASE_URL}ort/`
   runtime.env.wasm.numThreads = 1
   const session = await runtime.InferenceSession.create(
-    `${import.meta.env.BASE_URL}models/yolov8n.onnx`,
+    `${import.meta.env.BASE_URL}models/${model.filename}`,
     {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
     },
   )
-  return new BrowserRecognizer(runtime, session)
+  return new BrowserRecognizer(runtime, session, model)
 }
 
-function createInput(source: CanvasImageSource, sourceWidth: number, sourceHeight: number) {
+function createInput(
+  source: CanvasImageSource,
+  sourceWidth: number,
+  sourceHeight: number,
+  paddingColor: string,
+) {
   const canvas = document.createElement('canvas')
   canvas.width = INPUT_SIZE
   canvas.height = INPUT_SIZE
@@ -127,7 +153,7 @@ function createInput(source: CanvasImageSource, sourceWidth: number, sourceHeigh
   const resizedHeight = Math.round(sourceHeight * scale)
   const paddingX = Math.floor((INPUT_SIZE - resizedWidth) / 2)
   const paddingY = Math.floor((INPUT_SIZE - resizedHeight) / 2)
-  context.fillStyle = '#000000'
+  context.fillStyle = paddingColor
   context.fillRect(0, 0, INPUT_SIZE, INPUT_SIZE)
   context.drawImage(source, 0, 0, sourceWidth, sourceHeight, paddingX, paddingY, resizedWidth, resizedHeight)
 
@@ -145,6 +171,7 @@ function createInput(source: CanvasImageSource, sourceWidth: number, sourceHeigh
 
 function decodePeople(
   output: RuntimeTensor,
+  channels: number,
   confidenceThreshold: number,
   sourceWidth: number,
   sourceHeight: number,
@@ -152,11 +179,13 @@ function decodePeople(
   paddingX: number,
   paddingY: number,
 ): BrowserDetection[] {
-  const [, firstDimension, secondDimension] = output.dims
-  const channelsFirst = firstDimension === 84
+  const [batch, firstDimension, secondDimension] = output.dims
+  const channelsFirst = firstDimension === channels
   const anchors = channelsFirst ? secondDimension : firstDimension
-  const channels = channelsFirst ? firstDimension : secondDimension
-  if (channels < PERSON_CLASS_INDEX + 1 || !anchors) {
+  if (
+    output.dims.length !== 3 || batch !== 1 || !anchors ||
+    (!channelsFirst && secondDimension !== channels) || output.data.length !== channels * anchors
+  ) {
     throw new Error('Получен неподдерживаемый формат результата модели')
   }
 

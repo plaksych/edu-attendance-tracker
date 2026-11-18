@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getBrowserRecognizer, type BrowserRecognitionResult } from '../lib/browserRecognition'
+import {
+  getBrowserRecognizer,
+  type BrowserRecognitionModel,
+  type BrowserRecognitionResult,
+} from '../lib/browserRecognition'
 import { fmtBytes } from '../lib/format'
 import { Modal } from './Modal'
 
 type MediaKind = 'image' | 'video' | null
 type Phase = 'idle' | 'loading-model' | 'analysing' | 'error'
+
+const DEFAULT_CONFIDENCE: Record<BrowserRecognitionModel, string> = {
+  coco: '0.35',
+  classroom: '0.20',
+}
 
 interface Props {
   onClose: () => void
@@ -29,7 +38,8 @@ export function LocalRecognitionDialog({ onClose }: Props) {
   const [kind, setKind] = useState<MediaKind>(null)
   const [sourceUrl, setSourceUrl] = useState<string | null>(null)
   const [mediaReady, setMediaReady] = useState(false)
-  const [confidence, setConfidence] = useState('0.35')
+  const [confidence, setConfidence] = useState(DEFAULT_CONFIDENCE.coco)
+  const [model, setModel] = useState<BrowserRecognitionModel>('coco')
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<BrowserRecognitionResult | null>(null)
@@ -68,7 +78,7 @@ export function LocalRecognitionDialog({ onClose }: Props) {
     setError(null)
     try {
       setPhase('loading-model')
-      const recognizer = await getBrowserRecognizer()
+      const recognizer = await getBrowserRecognizer(model)
       setPhase('analysing')
       const nextResult = await recognizer.detect(source, sourceWidth, sourceHeight, Number(confidence))
       setResult(nextResult)
@@ -82,7 +92,7 @@ export function LocalRecognitionDialog({ onClose }: Props) {
     } finally {
       inferenceInProgress.current = false
     }
-  }, [confidence, kind])
+  }, [confidence, kind, model])
 
   useEffect(() => {
     if (!live || kind !== 'video') return
@@ -146,6 +156,27 @@ export function LocalRecognitionDialog({ onClose }: Props) {
         {sourceUrl && kind && (
           <>
             <div className="local-recognition__toolbar">
+              <div className="field">
+                <label htmlFor="local-recognition-model">Модель</label>
+                <select
+                  id="local-recognition-model"
+                  className="input"
+                  value={model}
+                  disabled={isBusy || live}
+                  onChange={(event) => {
+                    const nextModel = event.target.value === 'classroom' ? 'classroom' : 'coco'
+                    setModel(nextModel)
+                    setConfidence(DEFAULT_CONFIDENCE[nextModel])
+                    setResult(null)
+                    setCounts([])
+                    setPhase('idle')
+                    setError(null)
+                  }}
+                >
+                  <option value="coco">YOLOv8n · COCO</option>
+                  <option value="classroom">YOLOv8n · аудитории</option>
+                </select>
+              </div>
               <div className="field local-recognition__threshold">
                 <label htmlFor="local-recognition-threshold">Порог</label>
                 <input
