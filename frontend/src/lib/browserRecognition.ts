@@ -1,3 +1,5 @@
+import { isCompleteInTile, mergeDetections, planTiles, validateFrame, type Candidate } from './browserRecognitionTiling'
+
 export interface BrowserDetection {
   x: number
   y: number
@@ -15,6 +17,7 @@ export interface BrowserRecognitionResult {
 interface RuntimeTensor {
   data: Float32Array
   dims: readonly number[]
+  dispose?: () => void
 }
 
 interface RuntimeSession {
@@ -30,7 +33,7 @@ interface RuntimeApi {
       numThreads: number
     }
   }
-  Tensor: new (type: string, data: Float32Array, dims: readonly number[]) => unknown
+  Tensor: new (type: string, data: Float32Array, dims: readonly number[]) => { dispose?: () => void }
   InferenceSession: {
     create(path: string, options: Record<string, unknown>): Promise<RuntimeSession>
   }
@@ -58,6 +61,8 @@ type ModelConfig = (typeof MODELS)[BrowserRecognitionModel]
 const recognizerPromises = new Map<BrowserRecognitionModel, Promise<BrowserRecognizer>>()
 
 export class BrowserRecognizer {
+  private pendingInference: Promise<void> = Promise.resolve()
+
   constructor(
     private readonly runtime: RuntimeApi,
     private readonly session: RuntimeSession,
@@ -69,40 +74,95 @@ export class BrowserRecognizer {
     sourceWidth: number,
     sourceHeight: number,
     confidenceThreshold: number,
+    options: { detailed?: boolean; signal?: AbortSignal } = {},
   ): Promise<BrowserRecognitionResult> {
-    if (sourceWidth <= 0 || sourceHeight <= 0) {
-      throw new Error('Не удалось определить размер кадра')
+    validateFrame(sourceWidth, sourceHeight)
+    if (!Number.isFinite(confidenceThreshold) || confidenceThreshold < 0.1 || confidenceThreshold > 0.9) {
+      throw new Error('Порог должен быть от 0.1 до 0.9')
     }
-
     const startedAt = performance.now()
+    options.signal?.throwIfAborted()
+    const tiles = options.detailed === false ? [] : planTiles(sourceWidth, sourceHeight)
+    if (tiles.length === 0) {
+      const boxes = await this.detectSingle(source, sourceWidth, sourceHeight, confidenceThreshold)
+      options.signal?.throwIfAborted()
+      return {
+        boxes,
+        averageConfidence: boxes.length ? boxes.reduce((sum, box) => sum + box.confidence, 0) / boxes.length : null,
+        elapsedMs: performance.now() - startedAt,
+      }
+    }
+    // Freeze a single frame before any asynchronous inference, including video.
+    const frame = document.createElement('canvas')
+    frame.width = sourceWidth
+    frame.height = sourceHeight
+    const context = frame.getContext('2d')
+    if (!context) throw new Error('Canvas недоступен в этом браузере')
+    context.drawImage(source, 0, 0, sourceWidth, sourceHeight)
+    const candidates: Candidate[] = (await this.detectSingle(frame, sourceWidth, sourceHeight, confidenceThreshold))
+      .map((box) => ({ ...box, pass: 0 }))
+    const crop = document.createElement('canvas')
+    for (const [index, tile] of tiles.entries()) {
+      options.signal?.throwIfAborted()
+      crop.width = tile.width
+      crop.height = tile.height
+      const cropContext = crop.getContext('2d')
+      if (!cropContext) throw new Error('Canvas недоступен в этом браузере')
+      cropContext.drawImage(frame, tile.x, tile.y, tile.width, tile.height, 0, 0, tile.width, tile.height)
+      const boxes = await this.detectSingle(crop, tile.width, tile.height, confidenceThreshold)
+      for (const box of boxes) {
+        if (isCompleteInTile(box, tile, sourceWidth, sourceHeight)) {
+          candidates.push({ ...box, x: box.x + tile.x, y: box.y + tile.y, pass: index + 1 })
+        }
+      }
+      // Let input and cancellation events run between WASM passes.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    options.signal?.throwIfAborted()
+    const boxes = mergeDetections(candidates)
+    return {
+      boxes,
+      averageConfidence: boxes.length ? boxes.reduce((sum, box) => sum + box.confidence, 0) / boxes.length : null,
+      elapsedMs: performance.now() - startedAt,
+    }
+  }
+
+  private async detectSingle(
+    source: CanvasImageSource, sourceWidth: number, sourceHeight: number, confidenceThreshold: number,
+  ): Promise<BrowserDetection[]> {
     const { input, scale, paddingX, paddingY } = createInput(source, sourceWidth, sourceHeight, this.model.paddingColor)
     const inputName = this.session.inputNames[0]
     if (!inputName) throw new Error('У модели не определён входной тензор')
 
-    const outputs = await this.session.run({
-      [inputName]: new this.runtime.Tensor('float32', input, [1, 3, INPUT_SIZE, INPUT_SIZE]),
-    })
-    const outputName = this.session.outputNames[0] ?? Object.keys(outputs)[0]
-    const output = outputName ? outputs[outputName] : undefined
-    if (!output) throw new Error('Модель не вернула результаты')
+    const tensor = new this.runtime.Tensor('float32', input, [1, 3, INPUT_SIZE, INPUT_SIZE])
+    let outputs: Record<string, RuntimeTensor> = {}
+    const previous = this.pendingInference
+    let release!: () => void
+    this.pendingInference = new Promise<void>((resolve) => { release = resolve })
+    await previous
+    try {
+      outputs = await this.session.run({ [inputName]: tensor })
+      const outputName = this.session.outputNames[0] ?? Object.keys(outputs)[0]
+      const output = outputName ? outputs[outputName] : undefined
+      if (!output) throw new Error('Модель не вернула результаты')
 
-    const boxes = decodePeople(
-      output,
-      this.model.outputChannels,
-      confidenceThreshold,
-      sourceWidth,
-      sourceHeight,
-      scale,
-      paddingX,
-      paddingY,
-    )
-    const elapsedMs = performance.now() - startedAt
-    return {
-      boxes,
-      averageConfidence: boxes.length
-        ? boxes.reduce((sum, box) => sum + box.confidence, 0) / boxes.length
-        : null,
-      elapsedMs,
+      return decodePeople(
+        output,
+        this.model.outputChannels,
+        confidenceThreshold,
+        sourceWidth,
+        sourceHeight,
+        scale,
+        paddingX,
+        paddingY,
+      )
+    } finally {
+      try {
+        tensor.dispose?.()
+        for (const output of Object.values(outputs)) output.dispose?.()
+      } finally {
+        release()
+      }
     }
   }
 }
@@ -197,7 +257,13 @@ function decodePeople(
   const candidates: BrowserDetection[] = []
   for (let anchor = 0; anchor < anchors; anchor += 1) {
     const confidence = valueAt(PERSON_CLASS_INDEX, anchor)
-    if (confidence < confidenceThreshold) continue
+    if (!Number.isFinite(confidence) || confidence < confidenceThreshold) continue
+    // COCO assigns each proposal to its strongest class before class filtering.
+    let personIsBest = true
+    for (let channel = PERSON_CLASS_INDEX + 1; channel < channels; channel += 1) {
+      if (valueAt(channel, anchor) > confidence) { personIsBest = false; break }
+    }
+    if (!personIsBest) continue
 
     const centerX = valueAt(0, anchor)
     const centerY = valueAt(1, anchor)

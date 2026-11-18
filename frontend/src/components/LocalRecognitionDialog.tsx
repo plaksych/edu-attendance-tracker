@@ -34,6 +34,7 @@ export function LocalRecognitionDialog({ onClose }: Props) {
   const imageRef = useRef<HTMLImageElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const inferenceInProgress = useRef(false)
+  const activeAnalysis = useRef<AbortController | null>(null)
   const [file, setFile] = useState<File | null>(null)
   const [kind, setKind] = useState<MediaKind>(null)
   const [sourceUrl, setSourceUrl] = useState<string | null>(null)
@@ -50,7 +51,12 @@ export function LocalRecognitionDialog({ onClose }: Props) {
     if (sourceUrl) URL.revokeObjectURL(sourceUrl)
   }, [sourceUrl])
 
+  useEffect(() => () => activeAnalysis.current?.abort(), [])
+
   const selectFile = (nextFile: File | null) => {
+    activeAnalysis.current?.abort()
+    activeAnalysis.current = null
+    inferenceInProgress.current = false
     if (sourceUrl) URL.revokeObjectURL(sourceUrl)
     setFile(nextFile)
     setSourceUrl(nextFile ? URL.createObjectURL(nextFile) : null)
@@ -75,22 +81,34 @@ export function LocalRecognitionDialog({ onClose }: Props) {
     }
 
     inferenceInProgress.current = true
+    const controller = new AbortController()
+    activeAnalysis.current = controller
     setError(null)
     try {
       setPhase('loading-model')
       const recognizer = await getBrowserRecognizer(model)
+      controller.signal.throwIfAborted()
       setPhase('analysing')
-      const nextResult = await recognizer.detect(source, sourceWidth, sourceHeight, Number(confidence))
+      const nextResult = await recognizer.detect(source, sourceWidth, sourceHeight, Number(confidence), {
+        // The classroom confidence preset was calibrated on full-frame inference.
+        detailed: kind === 'image' && model === 'coco',
+        signal: controller.signal,
+      })
+      if (controller.signal.aborted) return false
       setResult(nextResult)
       setCounts((current) => [...current.slice(-59), nextResult.boxes.length])
       setPhase('idle')
       return true
     } catch (nextError) {
+      if (controller.signal.aborted) return false
       setError((nextError as Error).message)
       setPhase('error')
       return false
     } finally {
-      inferenceInProgress.current = false
+      if (activeAnalysis.current === controller) {
+        activeAnalysis.current = null
+        inferenceInProgress.current = false
+      }
     }
   }, [confidence, kind, model])
 

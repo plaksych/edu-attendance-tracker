@@ -41,6 +41,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Test recognition geometry
+        run: npm run test:recognition
+
       - name: Build static frontend
         run: npm run build -- --base=/edu-attendance-tracker/
         env:
