@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'HELP'
+На Ubuntu Server, из клона ветки production:
+  ./deploy-lgtu check
+  ./deploy-lgtu prepare --fetch-model          # либо --model-file /path/yolov8n.pt
+  ./deploy-lgtu install                        # первый запуск
+  ./deploy-lgtu camera                         # RTSP и привязка к аудитории
+  ./deploy-lgtu debug                          # проверочный JPEG
+  ./deploy-lgtu calibrate --count N            # сравнение с ручным подсчётом
+  ./deploy-lgtu doctor | status | start
+Понадобятся sudo, внутренний DNS, TLS и согласованный комплект релиза.
+Команда check ничего не устанавливает. Детали: docs/runbooks/release.md
+HELP
+}
+
+action=${1:-help}
+case "$action" in
+  help|-h|--help) usage; exit 0 ;;
+  check|prepare|install|camera|debug|calibrate|doctor|status|start|admin) shift ;;
+  *) usage >&2; exit 2 ;;
+esac
+cd -- "$(dirname -- "$0")"
+git rev-parse --is-inside-work-tree >/dev/null
+rev=$(git rev-parse HEAD)
+kit="/usr/local/lib/attendance-lgtu/$rev.pyz"
+if [[ "$action" == check ]]; then
+  python3 -c 'import sys; sys.exit("Нужен Python >= 3.11") if sys.version_info < (3,11) else None'
+  [[ -r /etc/os-release ]] && grep -qx 'ID=ubuntu' /etc/os-release || { echo 'Нужен Ubuntu Server' >&2; exit 1; }
+  [[ -d /run/systemd/system ]] || { echo 'Нужен systemd' >&2; exit 1; }
+  printf 'Ревизия: %s; CPU: %s\n' "$rev" "$(nproc)"
+  free -h
+  df -h /
+  if ! docker compose version 2>/dev/null; then echo 'Docker/Compose будет установлен при install.'; fi
+  echo 'Проверка ОС завершена. Образы, TLS, DNS и допуск проверяются при install.'
+  exit 0
+fi
+case "$action" in
+  prepare|install)
+    if [[ ! -r "$kit" ]]; then
+      temp=$(mktemp -d)
+      trap 'rm -f -- "$temp/kit.pyz"; rmdir -- "$temp"' EXIT
+      case "$#:${1:-}" in
+        0:|1:--fetch-model|2:--model-file) ;;
+        *) usage >&2; exit 2 ;;
+      esac
+      python3 scripts/lgtu_deploy.py pack --output "$temp/kit.pyz" "$@"
+      sudo install -d -m 0755 /usr/local/lib/attendance-lgtu
+      sudo install -m 0644 "$temp/kit.pyz" "$kit"
+    fi
+    sudo python3 -I "$kit" "$action"
+    ;;
+  *)
+    [[ -r "$kit" ]] || { echo 'Сначала выполните prepare для этой ревизии.' >&2; exit 1; }
+    exec sudo python3 -I "$kit" "$action" "$@"
+    ;;
+esac
