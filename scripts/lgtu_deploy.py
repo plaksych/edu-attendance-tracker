@@ -5,6 +5,7 @@ import contextlib
 import getpass
 import hashlib
 import http.cookiejar
+from http.client import HTTPException
 import ipaddress
 import json
 import os
@@ -16,6 +17,7 @@ import subprocess as sp
 import sys
 import tempfile
 import time
+from urllib.error import HTTPError
 import urllib.request
 from urllib.parse import urlsplit
 import uuid
@@ -41,6 +43,32 @@ def run(*args, **kw):
     return sp.run([str(a) for a in args], check=True, **kw)
 
 
+def load_model(repo, manifest, model_file, fetch_model):
+    path = model_file if model_file is not None else repo / manifest["filename"]
+    expected_sha = manifest["sha256"]
+    if path.is_file():
+        model = path.read_bytes()
+        if hashlib.sha256(model).hexdigest() == expected_sha:
+            return model
+        check(model_file is None and fetch_model, f"SHA-256 файла весов не совпадает: {path}")
+        print(f"SHA-256 локальных весов не совпадает: {path}. Скачиваю проверенную версию.", flush=True)
+    elif model_file is not None:
+        raise SystemExit(f"Файл весов не найден: {path}")
+
+    check(fetch_model, "Нет весов: укажите --model-file /путь/yolov8n.pt или --fetch-model.")
+    max_bytes = 32 * 1024 * 1024
+    try:
+        with urllib.request.urlopen(manifest["source"], timeout=60) as response:
+            model = response.read(max_bytes + 1)
+    except HTTPError as exc:
+        raise SystemExit(f"GitHub вернул HTTP {exc.code} при загрузке весов. Можно указать --model-file.") from None
+    except (OSError, HTTPException):
+        raise SystemExit("Не удалось скачать веса. Проверьте HTTPS-доступ к GitHub или укажите --model-file.") from None
+    check(len(model) <= max_bytes, "Загруженный файл весов превышает 32 МиБ")
+    check(hashlib.sha256(model).hexdigest() == expected_sha, "SHA-256 загруженных весов не совпадает с manifest")
+    return model
+
+
 def pack(target, model_file=None, fetch_model=False):
     repo = Path(__file__).resolve().parents[1]
     def git(*args):
@@ -48,15 +76,7 @@ def pack(target, model_file=None, fetch_model=False):
     revision = git("rev-parse", "HEAD").decode().strip()
     payload = {p: git("show", revision + ":" + p) for p in FILES}
     manifest = json.loads(payload["recognition/model-manifest.json"])
-    path = model_file or repo / manifest["filename"]
-    if path.is_file():
-        model = path.read_bytes()
-    else:
-        check(fetch_model and model_file is None,
-              "Нет весов: укажите --model-file /путь/yolov8n.pt или разрешите --fetch-model.")
-        with urllib.request.urlopen(manifest["source"], timeout=60) as response:
-            model = response.read(32 * 1024 * 1024 + 1)
-    check(hashlib.sha256(model).hexdigest() == manifest["sha256"], "Model hash mismatch")
+    model = load_model(repo, manifest, model_file, fetch_model)
     with zipfile.ZipFile(target, "x", zipfile.ZIP_DEFLATED) as z:
         z.writestr("__main__.py", git("show", revision + ":scripts/lgtu_deploy.py"))
         for name, data in payload.items():

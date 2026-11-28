@@ -5,13 +5,15 @@ usage() {
   cat <<'HELP'
 На Ubuntu Server, из клона ветки production:
   ./deploy-lgtu check
-  ./deploy-lgtu prepare --fetch-model          # либо --model-file /path/yolov8n.pt
+  ./deploy-lgtu prepare --fetch-model          # проверить локальные веса или скачать
+  ./deploy-lgtu prepare --model-file /path/yolov8n.pt
   ./deploy-lgtu install                        # первый запуск
   ./deploy-lgtu camera                         # RTSP и привязка к аудитории
   ./deploy-lgtu debug                          # проверочный JPEG
   ./deploy-lgtu calibrate --count N            # сравнение с ручным подсчётом
   ./deploy-lgtu doctor | status | start
-Понадобятся sudo, внутренний DNS, TLS и согласованный комплект релиза.
+prepare создаёт production.env при первом запуске. Для загрузки весов из GitHub
+нужен HTTPS-доступ. Внутренний DNS, TLS и допуск релиза нужны на этапе install.
 Команда check ничего не устанавливает. Детали: docs/runbooks/release.md
 HELP
 }
@@ -46,7 +48,7 @@ case "$action" in
         0:|1:--fetch-model|2:--model-file) ;;
         *) usage >&2; exit 2 ;;
       esac
-      python3 scripts/lgtu_deploy.py pack --output "$temp/kit.pyz" "$@"
+      python3 -I scripts/lgtu_deploy.py pack --output "$temp/kit.pyz" "$@"
       sudo install -d -m 0755 /usr/local/lib/attendance-lgtu
       sudo install -m 0644 "$temp/kit.pyz" "$kit"
     fi
